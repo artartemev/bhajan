@@ -1,0 +1,89 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+model User {
+  id                String             @id @default(cuid())
+  name              String?
+  handle            String?
+  image             String?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  // User preferences
+  defaultInstrument String             @default("guitar")
+  // Relations
+  favorites         Favorite[]
+  submissions       BhajanSubmission[]
+}
+
+model Bhajan {
+  id           String      @id @default(cuid())
+  title        String
+  author       String
+  lyrics       String // Raw lyrics with chord markings
+  translation  String?
+  // Audio content
+  snippetUrl   String?
+  fullAudioUrl String?
+  // Additional content
+  videoUrl     String?
+  analysisUrl  String?
+  lessonsUrl   String? // URL to lessons content
+  // Metadata
+  isApproved   Boolean     @default(false)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  // Relations
+  tags         BhajanTag[]
+  favorites    Favorite[]
+
+  @@map("bhajans")
+}
+
+model Tag {
+  id      String      @id @default(cuid())
+  name    String      @unique
+  // Relations
+  bhajans BhajanTag[]
+
+  @@map("tags")
+}
+
+model BhajanTag {
+  id       String @id @default(cuid())
+  bhajanId String
+  tagId    String
+  bhajan   Bhajan @relation(fields: [bhajanId], references: [id], onDelete: Cascade)
+  tag      Tag    @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@unique([bhajanId, tagId])
+  @@map("bhajan_tags")
+}
+
+model Favorite {
+  id        String   @id @default(cuid())
+  userId    String
+  bhajanId  String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bhajan    Bhajan   @relation(fields: [bhajanId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, bhajanId])
+  @@map("favorites")
+}
+
+model BhajanSubmission {
+  id             String   @id @default(cuid())
+  userId         String
+  title          String
+  author         String
+  lyrics         String
+  translation    String?
+  videoUrl       String?
+  audioBase64    String?
+  analysisBase64 String?
+  status         String   @default("pending") // pending, approved, rejected
+  createdAt      DateTime @default(now())
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("bhajan_submissions")
+}
