@@ -43,63 +43,10 @@ function AudioPlayerBar() { const audio = useAudio(); if (!audio.currentTrack) r
 function BhajanCard({ bhajan }: { bhajan: Bhajan }) { const navigate = useNavigate(); const audio = useAudio(); const { toggleFavorite, isFavorite } = useFavorites(); const handlePlaySnippet = async (e: React.MouseEvent) => { e.stopPropagation(); if (bhajan.snippetUrl) { await audio.play({ id: bhajan.id, title: bhajan.title, author: bhajan.author, audioUrl: bhajan.snippetUrl }); } }; const handleToggleFavorite = (e: React.MouseEvent) => { e.stopPropagation(); toggleFavorite(bhajan.id); }; return (<motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="bhajan-card p-4 cursor-pointer" onClick={() => navigate(`/bhajan/${bhajan.id}`)}><div className="flex items-center justify-between"><div className="flex-1"><h3 className="font-medium zen-heading">{bhajan.title}</h3><p className="text-sm text-muted-foreground">{bhajan.author}</p></div><div className="flex items-center gap-2"><Button variant="ghost" size="sm" onClick={handleToggleFavorite} className={isFavorite(bhajan.id) ? "text-red-500" : ""}><Heart className={`h-4 w-4 ${isFavorite(bhajan.id) ? "fill-current" : ""}`} /></Button>{bhajan.snippetUrl && <Button variant="ghost" size="sm" onClick={handlePlaySnippet}><Play className="h-4 w-4" /></Button>}</div></div></motion.div>); }
 
 function PianoChordDiagram({ notes, description }: { notes: string; description: string; }) {
-    const keyLayout = [
-        { name: 'C', color: 'white' }, { name: 'C#', color: 'black' },
-        { name: 'D', color: 'white' }, { name: 'D#', color: 'black' },
-        { name: 'E', color: 'white' },
-        { name: 'F', color: 'white' }, { name: 'F#', color: 'black' },
-        { name: 'G', color: 'white' }, { name: 'G#', color: 'black' },
-        { name: 'A', color: 'white' }, { name: 'A#', color: 'black' },
-        { name: 'B', color: 'white' },
-    ];
-    
-    const noteToKeyMap: Record<string, string> = {
-        'Bb': 'A#', 'Eb': 'D#', 'Ab': 'G#', 'Db': 'C#', 'Gb': 'F#', 'Cb': 'B', 'Fb': 'E'
-    };
-    
+    const keyLayout = [ { name: 'C', color: 'white' }, { name: 'C#', color: 'black' }, { name: 'D', color: 'white' }, { name: 'D#', color: 'black' }, { name: 'E', color: 'white' }, { name: 'F', color: 'white' }, { name: 'F#', color: 'black' }, { name: 'G', color: 'white' }, { name: 'G#', color: 'black' }, { name: 'A', color: 'white' }, { name: 'A#', color: 'black' }, { name: 'B', color: 'white' } ];
+    const noteToKeyMap: Record<string, string> = { 'Bb': 'A#', 'Eb': 'D#', 'Ab': 'G#', 'Db': 'C#', 'Gb': 'F#', 'Cb': 'B', 'Fb': 'E' };
     const pressedNotes = notes.split("-").map(note => noteToKeyMap[note] || note);
-
-    return (
-        <div className="p-3 bg-card rounded-md border">
-            <p className="text-center font-bold text-sm mb-2">{description}</p>
-            <div className="relative flex justify-center h-28">
-                {keyLayout.map((key) => {
-                    if (key.color === 'white') {
-                        const isPressed = pressedNotes.includes(key.name);
-                        return (
-                            <div key={key.name} className={`h-full w-8 border border-gray-300 rounded-b-sm relative ${isPressed ? 'bg-gray-200' : 'bg-white'}`}>
-                                <span className={`absolute bottom-1 left-1/2 -translate-x-1/2 text-xs text-black`}>{key.name}</span>
-                            </div>
-                        );
-                    }
-                    return null;
-                })}
-                <div className="absolute top-0 left-0 h-16 flex items-start">
-                    {/* These margins are a simplified way to position black keys. A more robust solution might use absolute positioning based on index. */}
-                    <div className="w-4 h-full"></div>
-                    <div className="w-4 h-full">
-                        {pressedNotes.includes("C#") ? <div className="w-5 h-full bg-primary rounded-b-sm"><span className="absolute bottom-1 left-1/2 -translate-x-1/2 text-xs text-white">C#</span></div> : <div className="w-5 h-full bg-gray-800 rounded-b-sm"><span className="absolute bottom-1 left-1/2 -translate-x-1/2 text-xs text-white">C#</span></div>}
-                    </div>
-                    <div className="w-4 h-full"></div>
-                    <div className="w-4 h-full">
-                        {pressedNotes.includes("D#") ? <div className="w-5 h-full bg-primary rounded-b-sm"><span className="absolute bottom-1 left-1/2 -translate-x-1/2 text-xs text-white">D#</span></div> : <div className="w-5 h-full bg-gray-800 rounded-b-sm"><span className="absolute bottom-1 left-1/2 -translate-x-1/2 text-xs text-white">D#</span></div>}
-                    </div>
-                    <div className="w-8 h-full"></div>
-                    <div className="w-4 h-full">
-                         {pressedNotes.includes("F#") ? <div className="w-5 h-full bg-primary rounded-b-sm"><span className="absolute bottom-1 left-1/2 -translate-x-1/2 text-xs text-white">F#</span></div> : <div className="w-5 h-full bg-gray-800 rounded-b-sm"><span className="absolute bottom-1 left-1/2 -translate-x-1/2 text-xs text-white">F#</span></div>}
-                    </div>
-                     <div className="w-4 h-full"></div>
-                    <div className="w-4 h-full">
-                        {pressedNotes.includes("G#") ? <div className="w-5 h-full bg-primary rounded-b-sm"><span className="absolute bottom-1 left-1/2 -translate-x-1/2 text-xs text-white">G#</span></div> : <div className="w-5 h-full bg-gray-800 rounded-b-sm"><span className="absolute bottom-1 left-1/2 -translate-x-1/2 text-xs text-white">G#</span></div>}
-                    </div>
-                     <div className="w-4 h-full"></div>
-                     <div className="w-4 h-full">
-                        {pressedNotes.includes("A#") ? <div className="w-5 h-full bg-primary rounded-b-sm"><span className="absolute bottom-1 left-1/2 -translate-x-1/2 text-xs text-white">A#</span></div> : <div className="w-5 h-full bg-gray-800 rounded-b-sm"><span className="absolute bottom-1 left-1/2 -translate-x-1/2 text-xs text-white">A#</span></div>}
-                    </div>
-                </div>
-            </div>
-        </div>
-    );
+    return (<div className="p-3 bg-card rounded-md border"><p className="text-center font-bold text-sm mb-2">{description}</p><div className="relative flex justify-center h-28">{keyLayout.filter(k => k.color === 'white').map((key) => (<div key={key.name} className={`h-full w-8 border-b border-l border-r border-gray-300 rounded-b-sm relative ${pressedNotes.includes(key.name) ? 'bg-primary/20' : 'bg-white'}`}><span className="absolute bottom-2 left-1/2 -translate-x-1/2 text-xs text-black">{key.name}</span></div>))}<div className="absolute top-0 left-0 h-16 flex items-start" style={{ width: 'calc(8 * 7px)' }}><div className="absolute top-0 h-full w-5 bg-gray-800 rounded-b-sm z-10" style={{ left: '22px', backgroundColor: pressedNotes.includes('C#') ? '#c026d3' : undefined }}><span className="absolute bottom-2 left-1/2 -translate-x-1/2 text-xs text-white">C#</span></div><div className="absolute top-0 h-full w-5 bg-gray-800 rounded-b-sm z-10" style={{ left: '54px', backgroundColor: pressedNotes.includes('D#') ? '#c026d3' : undefined }}><span className="absolute bottom-2 left-1/2 -translate-x-1/2 text-xs text-white">D#</span></div><div className="absolute top-0 h-full w-5 bg-gray-800 rounded-b-sm z-10" style={{ left: '118px', backgroundColor: pressedNotes.includes('F#') ? '#c026d3' : undefined }}><span className="absolute bottom-2 left-1/2 -translate-x-1/2 text-xs text-white">F#</span></div><div className="absolute top-0 h-full w-5 bg-gray-800 rounded-b-sm z-10" style={{ left: '150px', backgroundColor: pressedNotes.includes('G#') ? '#c026d3' : undefined }}><span className="absolute bottom-2 left-1/2 -translate-x-1/2 text-xs text-white">G#</span></div><div className="absolute top-0 h-full w-5 bg-gray-800 rounded-b-sm z-10" style={{ left: '182px', backgroundColor: pressedNotes.includes('A#') ? '#c026d3' : undefined }}><span className="absolute bottom-2 left-1/2 -translate-x-1/2 text-xs text-white">A#</span></div></div></div></div>);
 }
 
 function ChordDiagramDisplay({ chordData }: { chordData: { frets?: string; notes?: string; description: string; instrument: string; }; }) { const { frets, notes, description, instrument } = chordData; if ((instrument === "harmonium" || instrument === "piano") && notes) { return <PianoChordDiagram notes={notes} description={description} />; } if (!frets) return null; const numStrings = instrument === "ukulele" ? 4 : 6; const numFrets = 5; const width = instrument === "ukulele" ? 80 : 100; const height = 120; const paddingTop = 20; const paddingLeft = 10; const stringSpacing = (width - paddingLeft * 2) / (numStrings - 1); const fretSpacing = (height - paddingTop) / numFrets; return (<div className="p-2 bg-card rounded-md border"><p className="text-center font-bold text-sm mb-1">{description}</p><p className="text-center text-xs text-muted-foreground mb-2 capitalize">{instrument}</p><svg width={width} height={height} viewBox={`0 0 ${width} ${height}`}>{ [...Array(numFrets + 1)].map((_, i) => (<line key={i} x1={paddingLeft} y1={paddingTop + i * fretSpacing} x2={width - paddingLeft} y2={paddingTop + i * fretSpacing} stroke="currentColor" strokeWidth={i === 0 ? "2" : "0.5"} />))}{[...Array(numStrings)].map((_, i) => (<line key={i} x1={paddingLeft + i * stringSpacing} y1={paddingTop} x2={paddingLeft + i * stringSpacing} y2={height} stroke="currentColor" strokeWidth="0.5" />))}{frets.split("").map((fret, stringIndex) => { const fretNum = fret === "x" || fret === "X" ? -1 : parseInt(fret, 10); if (fretNum > 0) { return (<circle key={stringIndex} cx={paddingLeft + stringIndex * stringSpacing} cy={paddingTop + (fretNum - 0.5) * fretSpacing} r={stringSpacing / 3.5} fill="currentColor" />); } return null; })}{frets.split("").map((fret, stringIndex) => { if (fret === "x" || fret === "X") { return (<text key={stringIndex} x={paddingLeft + stringIndex * stringSpacing} y={paddingTop - 5} textAnchor="middle" fontSize="10" fill="currentColor">×</text>); } if (fret === "0") { return (<circle key={stringIndex} cx={paddingLeft + stringIndex * stringSpacing} cy={paddingTop - 8} r={3} stroke="currentColor" fill="none" strokeWidth="1" />); } return null; })}</svg></div>); }
@@ -111,52 +58,11 @@ function InfoPage({ title, children }: { title: string; children: React.ReactNod
 // ЭКРАНЫ
 function BhajanListScreen() {
     const [searchQuery, setSearchQuery] = useState("");
-    
-    const { data: bhajans, isLoading, isError, isSuccess } = useQuery({
-      queryKey: ["bhajans", searchQuery], 
-      queryFn: () => apiClient.listBhajans({ search: searchQuery }),
-      retry: 1,
-    });
-  
-    useEffect(() => {
-        if (isSuccess && bhajans) {
-            console.log("Data fetched successfully, caching...");
-            setCachedBhajans(bhajans);
-        }
-    }, [isSuccess, bhajans]);
-
-    const { data: cachedBhajansData } = useQuery({
-      queryKey: ["cachedBhajans"],
-      queryFn: getCachedBhajans,
-      enabled: isError,
-    });
-  
+    const { data: bhajans, isLoading, isError, isSuccess } = useQuery({ queryKey: ["bhajans", searchQuery], queryFn: () => apiClient.listBhajans({ search: searchQuery }), retry: 1, });
+    useEffect(() => { if (isSuccess && bhajans) { console.log("Data fetched successfully, caching..."); setCachedBhajans(bhajans); } }, [isSuccess, bhajans]);
+    const { data: cachedBhajansData } = useQuery({ queryKey: ["cachedBhajans"], queryFn: getCachedBhajans, enabled: isError, });
     const displayData = isError ? cachedBhajansData?.data : bhajans;
-
-    return (
-      <div className="pb-32">
-        <header className="sticky top-0 bg-background/95 backdrop-blur-sm border-b border-border p-4 zen-shadow">
-          <h1 className="text-2xl font-light zen-heading text-center mb-4">Bhajan Sangam</h1>
-          {isError && (
-            <div className="flex items-center justify-center gap-2 text-sm text-destructive mb-2 p-2 bg-destructive/10 rounded-md">
-                <WifiOff className="h-4 w-4" />
-                <span>Offline mode. Data may be outdated.</span>
-            </div>
-          )}
-          <div className="relative mb-4">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input placeholder="Search bhajans..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-10" />
-          </div>
-        </header>
-        <div className="p-4 space-y-3">
-          {isLoading && <div className="text-center py-12 text-muted-foreground">Loading...</div>}
-          <AnimatePresence>
-            {displayData && displayData.map((bhajan: Bhajan) => <BhajanCard key={bhajan.id} bhajan={bhajan} />)}
-          </AnimatePresence>
-          {!isLoading && (!displayData || displayData.length === 0) && <div className="text-center py-12"><Music className="h-12 w-12 text-muted-foreground mx-auto mb-4" /><p className="text-muted-foreground">No bhajans found</p></div>}
-        </div>
-      </div>
-    );
+    return (<div className="pb-32"><header className="sticky top-0 bg-background/95 backdrop-blur-sm border-b border-border p-4 zen-shadow"><h1 className="text-2xl font-light zen-heading text-center mb-4">Bhajan Sangam</h1>{isError && (<div className="flex items-center justify-center gap-2 text-sm text-destructive mb-2 p-2 bg-destructive/10 rounded-md"><WifiOff className="h-4 w-4" /><span>Offline mode. Data may be outdated.</span></div>)}<div className="relative mb-4"><Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" /><Input placeholder="Search bhajans..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-10" /></div></header><div className="p-4 space-y-3">{isLoading && <div className="text-center py-12 text-muted-foreground">Loading...</div>}<AnimatePresence>{displayData && displayData.map((bhajan: Bhajan) => <BhajanCard key={bhajan.id} bhajan={bhajan} />)}</AnimatePresence>{!isLoading && (!displayData || displayData.length === 0) && <div className="text-center py-12"><Music className="h-12 w-12 text-muted-foreground mx-auto mb-4" /><p className="text-muted-foreground">No bhajans found</p></div>}</div></div>);
 }
 function BhajanDetailScreen() { const navigate = useNavigate(); const { id } = useParams<{ id: string }>(); const [selectedInstrument, setSelectedInstrument] = useState("guitar"); const [activeTab, setActiveTab] = useState("lyrics"); const audio = useAudio(); const { data: bhajan } = useQuery(["bhajan", id], () => apiClient.getBhajanDetail({ id: id! }), { enabled: !!id }); const { toggleFavorite, isFavorite } = useFavorites(); if (!bhajan) return <div className="flex items-center justify-center h-screen"><Music className="h-12 w-12 text-muted-foreground mx-auto mb-4" /><p>Loading...</p></div>; const playAudio = async (url: string, type: 'snippet' | 'analysis') => { await audio.play({ id: `${bhajan.id}-${type}`, title: `${bhajan.title} (${type})`, author: bhajan.author, audioUrl: url }); }; return (<div className="pb-32"><header className="sticky top-0 bg-background/95 backdrop-blur-sm border-b border-border p-4 zen-shadow"><div className="flex items-center gap-4 mb-4"><Button variant="ghost" size="sm" onClick={() => navigate(-1)}><ArrowLeft className="h-4 w-4" /></Button><div className="flex-1"><h1 className="text-xl font-medium zen-heading">{bhajan.title}</h1><p className="text-sm text-muted-foreground">{bhajan.author}</p></div><Button variant="ghost" size="sm" onClick={() => toggleFavorite(bhajan.id)}><Heart className={`h-5 w-5 ${isFavorite(bhajan.id) ? "fill-current text-red-500" : ""}`} /></Button></div><div className="flex gap-2 mb-4 flex-wrap">{bhajan.hasAudio && bhajan.snippetUrl && <Button variant="outline" size="sm" onClick={() => playAudio(bhajan.snippetUrl!, 'snippet')}><Music4 className="h-4 w-4 mr-2" />Play Snippet</Button>}{bhajan.hasAnalyses && bhajan.analysisUrl && <Button variant="outline" size="sm" onClick={() => playAudio(bhajan.analysisUrl!, 'analysis')}><BookOpen className="h-4 w-4 mr-2" />Play Analysis</Button>}{bhajan.hasLessons && <Button variant="outline" size="sm" onClick={() => navigate(`/bhajan/${bhajan.id}/lessons`)}><BookOpen className="h-4 w-4 mr-2" />View Lessons</Button>}</div><Select value={selectedInstrument} onValueChange={setSelectedInstrument}><SelectTrigger className="w-full"><SelectValue placeholder="Select instrument" /></SelectTrigger><SelectContent><SelectItem value="guitar">Guitar</SelectItem><SelectItem value="ukulele">Ukulele</SelectItem><SelectItem value="harmonium">Piano/Harmonium</SelectItem></SelectContent></Select></header><div className="p-4"><Tabs value={activeTab} onValueChange={setActiveTab}><TabsList className="grid w-full grid-cols-2"><TabsTrigger value="lyrics">Lyrics</TabsTrigger><TabsTrigger value="translation">Translation</TabsTrigger></TabsList><TabsContent value="lyrics" className="mt-6"><div className="space-y-4">{bhajan.lyricsWithChords.map((section, index) => (<div key={index} className="space-y-2">{section.chords && <div className="text-sm font-mono text-primary flex flex-wrap gap-x-4 gap-y-2">{section.chords.split(/\s+/).map((chord, i) => chord ? <Chord key={i} name={chord} instrument={selectedInstrument} /> : null)}</div>}<div className="zen-body whitespace-pre-line leading-relaxed">{section.lyrics.split(' ').map((word, wordIndex) => (<React.Fragment key={wordIndex}><Word>{word}</Word>{' '}</React.Fragment>))}</div></div>))}</div></TabsContent><TabsContent value="translation" className="mt-6"><div className="zen-body whitespace-pre-line">{bhajan.translation}</div></TabsContent></Tabs></div></div>); }
 
@@ -182,15 +88,13 @@ function LessonsScreen() {
                 {videoId ? (
                     <div className="space-y-4">
                         <div className="aspect-video w-full bg-muted rounded-lg overflow-hidden">
-                            <iframe src={`https://www.youtube.com/embed/${videoId}`} title={`${bhajan.title} - Lessons`} className="w-full h-full border-0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowFullScreen></iframe>
+                            <iframe src={`https://www.youtube.com/embed/${videoId}`} title={`${bhajan.title} - Lessons`} className="w-full h-full border-0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowFullScreen />
                         </div>
                     </div>
                 ) : (
                     <div className="text-center py-12">
                         <p>Video lesson available.</p>
-                        <Button asChild>
-                            <a href={bhajan.lessonsUrl} target="_blank" rel="noopener noreferrer">Open Lesson</a>
-                        </Button>
+                        <Button asChild><a href={bhajan.lessonsUrl} target="_blank" rel="noopener noreferrer">Open Lesson</a></Button>
                     </div>
                 )}
             </div>
@@ -200,7 +104,7 @@ function LessonsScreen() {
 
 function FavoritesScreen() {
     const { favoriteIds } = useFavorites();
-    const { data: allBhajans = [], isLoading } = useQuery(["bhajans", ""], () => apiClient.listBhajans({}));
+    const { data: allBhajans = [], isLoading } = useQuery({ queryKey: ["bhajans", ""], queryFn: () => apiClient.listBhajans({}) });
     const favoriteBhajans = allBhajans.filter(bhajan => favoriteIds.includes(bhajan.id));
     return (
         <div className="pb-32">
@@ -216,7 +120,7 @@ function FavoritesScreen() {
                     </div>
                 )}
                 <AnimatePresence>
-                    {favoriteBhajans.map((bhajan) => <BhajanCard key={bhajan.id} bhajan={bhajan} />)}
+                    {favoriteBhajans.map((bhajan) => (<BhajanCard key={bhajan.id} bhajan={bhajan} />))}
                 </AnimatePresence>
             </div>
         </div>
