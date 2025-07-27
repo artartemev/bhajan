@@ -1,8 +1,9 @@
-// File: components/Word.tsx (исправленная версия)
+// File: components/Word.tsx (версия с использованием IndexedDB)
 import React from 'react';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { useQuery } from '@tanstack/react-query';
 import { Badge } from './ui/badge';
+import { getWordFromDb, setWordInDb } from '../lib/db'; // ✅ Импортируем функции для работы с БД
 
 type WordAnalysis = {
   sourceLanguage: "sanskrit" | "bengali" | "unknown";
@@ -14,7 +15,8 @@ type WordAnalysis = {
   confidence: "high" | "medium" | "low";
 };
 
-const fetchWordAnalysis = async (word: string): Promise<WordAnalysis> => {
+// Функция запроса к AI остается как запасной вариант
+const fetchWordAnalysisFromApi = async (word: string): Promise<WordAnalysis> => {
   const response = await fetch('/api/translate-word', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -27,20 +29,37 @@ const fetchWordAnalysis = async (word: string): Promise<WordAnalysis> => {
 };
 
 const cleanWord = (word: string) => {
-  return word.replace(/[.,!?;:]+$/, '').replace(/^-/, '');
+  return word.toLowerCase().replace(/[.,!?;:"“]/g, '');
 };
 
 export const Word = ({ children }: { children: string }) => {
   const [isOpen, setIsOpen] = React.useState(false);
   const cleaned = cleanWord(children);
 
-  // ✅ ИСПРАВЛЕНИЕ 1: Достаем isError из хука
+  // ✅ Обновленная логика useQuery
   const { data, isLoading, isError } = useQuery<WordAnalysis>({
     queryKey: ['word', cleaned],
-    queryFn: () => fetchWordAnalysis(cleaned),
-    enabled: isOpen,
+    queryFn: async () => {
+      // 1. Сначала ищем слово в локальной базе
+      const cachedWord = await getWordFromDb(cleaned);
+      if (cachedWord) {
+        console.log(`Found "${cleaned}" in local DB.`);
+        return cachedWord;
+      }
+
+      // 2. Если не нашли, идем к API
+      console.log(`"${cleaned}" not in DB, fetching from API...`);
+      const apiData = await fetchWordAnalysisFromApi(cleaned);
+      
+      // 3. Сохраняем результат в базу для будущего использования
+      await setWordInDb({ word: cleaned, ...apiData });
+      console.log(`Saved "${cleaned}" to local DB.`);
+      
+      return apiData;
+    },
+    enabled: isOpen, // Запрос выполняется только при открытии Popover
     staleTime: Infinity,
-    retry: false,
+    retry: 1, // Попробовать еще раз в случае ошибки сети
   });
 
   if (cleaned.length < 3) {
@@ -53,32 +72,31 @@ export const Word = ({ children }: { children: string }) => {
         <span className="cursor-pointer text-primary hover:underline">{children}</span>
       </PopoverTrigger>
       <PopoverContent className="w-80" align="start">
-        {isLoading && <p>Analyzing word...</p>}
-        {/* ✅ ИСПРАВЛЕНИЕ 2: Используем isError вместо error */}
-        {isError && <p className="text-destructive">Could not analyze word.</p>}
+        {isLoading && <p>Анализ слова...</p>}
+        {isError && <p className="text-destructive">Не удалось проанализировать слово.</p>}
         {data && (
           <div className="space-y-3">
             <div>
               <h4 className="font-medium leading-none">{data.transliteration}</h4>
               <div className="flex items-center gap-2 mt-1">
                 <span className="text-sm text-muted-foreground capitalize">{data.sourceLanguage}</span>
-                {data.isProperNoun && <Badge variant="secondary">Proper Noun</Badge>}
+                {data.isProperNoun && <Badge variant="secondary">Имя собственное</Badge>}
               </div>
             </div>
             <hr />
             <div>
-                <p><b>Russian:</b> {data.russianTranslation}</p>
-                <p><b>English:</b> {data.englishTranslation}</p>
+                <p><b>Русский:</b> {data.russianTranslation}</p>
+                <p><b>Английский:</b> {data.englishTranslation}</p>
             </div>
             {data.spiritualMeaning && (
                 <>
                     <hr />
                     <p className="text-sm">
-                    <b>Spiritual meaning:</b> {data.spiritualMeaning}
+                    <b>Духовное значение:</b> {data.spiritualMeaning}
                     </p>
                 </>
             )}
-            <p className="text-xs text-right text-muted-foreground pt-2">Confidence: {data.confidence}</p>
+            <p className="text-xs text-right text-muted-foreground pt-2">Уверенность: {data.confidence}</p>
           </div>
         )}
       </PopoverContent>
