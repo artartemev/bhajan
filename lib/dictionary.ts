@@ -1,14 +1,12 @@
-// File: lib/dictionary.ts
+// File: lib/dictionary.ts (версия с исправлением для итерации Set)
 
 import { apiClient } from '../client/api';
 import { getWordFromDb, setWordInDb } from './db';
 
-// Простая функция для очистки слова от пунктуации
 const cleanWord = (word: string): string => {
   return word.toLowerCase().replace(/[.,!?;:"“]/g, '');
 };
 
-// Функция, которая будет наполнять словарь в фоновом режиме
 export const populateDictionaryInBackground = async (bhajans: any[]) => {
   if (!bhajans || bhajans.length === 0) return;
 
@@ -16,12 +14,11 @@ export const populateDictionaryInBackground = async (bhajans: any[]) => {
   
   const allWords = new Set<string>();
 
-  // 1. Собираем все уникальные слова из всех бхаджанов
   bhajans.forEach(bhajan => {
     bhajan.lyricsWithChords?.forEach((line: { lyrics: string }) => {
       line.lyrics.split(/\s+/).forEach(word => {
         const cleaned = cleanWord(word);
-        if (cleaned.length > 2) { // Собираем слова длиннее 2 символов
+        if (cleaned.length > 2) {
           allWords.add(cleaned);
         }
       });
@@ -30,14 +27,15 @@ export const populateDictionaryInBackground = async (bhajans: any[]) => {
 
   console.log(`Found ${allWords.size} unique words. Checking against local DB...`);
 
-  // 2. Проверяем каждое слово и запрашиваем перевод, если его нет
-  for (const word of allWords) {
+  // ✅ ИСПРАВЛЕНИЕ: Конвертируем Set в массив перед перебором
+  const wordsToProcess = Array.from(allWords);
+
+  for (const word of wordsToProcess) {
     const existingEntry = await getWordFromDb(word);
     
     if (!existingEntry) {
       try {
         console.log(`Fetching translation for: ${word}`);
-        // Используем существующий API-эндпоинт для получения перевода
         const response = await fetch('/api/translate-word', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -46,10 +44,8 @@ export const populateDictionaryInBackground = async (bhajans: any[]) => {
 
         if (response.ok) {
           const translationData = await response.json();
-          // Сохраняем полученный перевод в нашу локальную базу
           await setWordInDb({ word: word, ...translationData });
         }
-        // Небольшая задержка, чтобы не перегружать API
         await new Promise(res => setTimeout(res, 500)); 
       } catch (error) {
         console.error(`Failed to fetch or save translation for "${word}"`, error);
