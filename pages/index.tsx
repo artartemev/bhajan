@@ -1,4 +1,4 @@
-// File: pages/index.tsx (финальная версия с исправленной логикой SVG аккордов)
+// File: pages/index.tsx (финальная версия с полностью исправленной SVG-генерацией аккордов)
 
 import React, { useState, useRef, useEffect, createContext, useContext } from "react";
 import dynamic from 'next/dynamic';
@@ -41,26 +41,58 @@ function formatTime(seconds: number): string { const mins = Math.floor(seconds /
 function BottomNavigation() { const location = useLocation(); const navItems = [{ path: "/", icon: Home, label: "Bhajans" }, { path: "/favorites", icon: Heart, label: "Favorites" }, { path: "/settings", icon: Settings, label: "Settings" }]; return (<nav className="fixed bottom-0 left-0 right-0 bg-card border-t border-border zen-shadow-lg"><div className="flex justify-around items-center h-16">{navItems.map((item) => { const isActive = location.pathname === item.path; return <Link key={item.path} to={item.path} className={`flex flex-col items-center justify-center flex-1 h-full transition-colors ${isActive ? "text-primary" : "text-muted-foreground hover:text-foreground"}`}><item.icon className="h-5 w-5" /><span className="text-xs mt-1">{item.label}</span></Link>; })}</div></nav>); }
 function AudioPlayerBar() { const audio = useAudio(); if (!audio.currentTrack) return null; return (<div className="fixed bottom-16 left-0 right-0 bg-card border-t border-border zen-shadow-lg p-4"><div className="flex items-center gap-4"><div className="flex-1 min-w-0"><h4 className="font-medium text-sm truncate">{audio.currentTrack.title}</h4><p className="text-xs text-muted-foreground truncate">{audio.currentTrack.author}</p></div><div className="flex items-center gap-2"><Button variant="ghost" size="sm" onClick={() => audio.seek(Math.max(0, audio.currentTime - 15))}><SkipBack className="h-4 w-4" /></Button><Button variant="ghost" size="sm" onClick={audio.isPlaying ? audio.pause : () => audio.play(audio.currentTrack)}>{audio.isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}</Button><Button variant="ghost" size="sm" onClick={() => audio.seek(Math.min(audio.duration, audio.currentTime + 15))}><SkipForward className="h-4 w-4" /></Button></div></div><div className="mt-2"><Slider value={[audio.currentTime]} max={audio.duration || 100} step={1} onValueChange={([value]) => audio.seek(value || 0)} className="w-full" /><div className="flex justify-between text-xs text-muted-foreground mt-1"><span>{formatTime(audio.currentTime)}</span><span>{formatTime(audio.duration)}</span></div></div></div>); }
 function BhajanCard({ bhajan }: { bhajan: Bhajan }) { const navigate = useNavigate(); const audio = useAudio(); const { toggleFavorite, isFavorite } = useFavorites(); const handlePlaySnippet = async (e: React.MouseEvent) => { e.stopPropagation(); if (bhajan.snippetUrl) { await audio.play({ id: bhajan.id, title: bhajan.title, author: bhajan.author, audioUrl: bhajan.snippetUrl }); } }; const handleToggleFavorite = (e: React.MouseEvent) => { e.stopPropagation(); toggleFavorite(bhajan.id); }; return (<motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="bhajan-card p-4 cursor-pointer" onClick={() => navigate(`/bhajan/${bhajan.id}`)}><div className="flex items-center justify-between"><div className="flex-1"><h3 className="font-medium zen-heading">{bhajan.title}</h3><p className="text-sm text-muted-foreground">{bhajan.author}</p></div><div className="flex items-center gap-2"><Button variant="ghost" size="sm" onClick={handleToggleFavorite} className={isFavorite(bhajan.id) ? "text-red-500" : ""}><Heart className={`h-4 w-4 ${isFavorite(bhajan.id) ? "fill-current" : ""}`} /></Button>{bhajan.snippetUrl && <Button variant="ghost" size="sm" onClick={handlePlaySnippet}><Play className="h-4 w-4" /></Button>}</div></div></motion.div>); }
-const PianoKey = ({ isBlack, isPressed, label }: { isBlack: boolean; isPressed: boolean; label: string; }) => { const whiteKeyClass = "h-24 w-8 border-b border-r border-gray-300 rounded-b-sm relative"; const blackKeyClass = "h-14 w-5 bg-gray-800 rounded-b-sm absolute -ml-2.5 z-10"; const pressedClass = isBlack ? "bg-primary" : "bg-gray-200"; return (<div className={`${isBlack ? blackKeyClass : whiteKeyClass} ${isPressed ? pressedClass : (isBlack ? 'bg-gray-800' : 'bg-white')}`}><span className={`absolute bottom-1 left-1/2 -translate-x-1/2 text-xs ${isBlack ? 'text-white' : 'text-black'}`}>{isPressed ? label : ''}</span></div>); };
 
 // ✅ ИСПРАВЛЕНИЕ: Компонент для отображения аккордов на фортепиано
 function PianoChordDiagram({ notes, description }: { notes: string; description: string; }) {
-    const keys = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+    const keyLayout = [
+        { name: 'C', color: 'white' }, { name: 'C#', color: 'black' },
+        { name: 'D', color: 'white' }, { name: 'D#', color: 'black' },
+        { name: 'E', color: 'white' },
+        { name: 'F', color: 'white' }, { name: 'F#', color: 'black' },
+        { name: 'G', color: 'white' }, { name: 'G#', color: 'black' },
+        { name: 'A', color: 'white' }, { name: 'A#', color: 'black' },
+        { name: 'B', color: 'white' },
+    ];
     
-    // ✅ ИСПРАВЛЕНИЕ: Правильное преобразование бемолей в диезы
     const noteToKeyMap: Record<string, string> = {
-        'Bb': 'A#', 'Eb': 'D#', 'Ab': 'G#', 'Db': 'C#', 'Gb': 'F#',
-        'Cb': 'B', 'Fb': 'E'
+        'Bb': 'A#', 'Eb': 'D#', 'Ab': 'G#', 'Db': 'C#', 'Gb': 'F#', 'Cb': 'B', 'Fb': 'E'
     };
     
-    const pressedNotes = notes.split("-").map(note => {
-        if (note.endsWith('b')) {
-            return noteToKeyMap[note] || note;
-        }
-        return note;
-    });
+    const pressedNotes = notes.split("-").map(note => noteToKeyMap[note] || note);
 
-    return (<div className="p-3 bg-card rounded-md border"><p className="text-center font-bold text-sm mb-2">{description}</p><div className="flex justify-center">{keys.map(key => <PianoKey key={key} isBlack={key.includes("#")} isPressed={pressedNotes.includes(key)} label={key} />)}</div></div>);
+    return (
+        <div className="p-3 bg-card rounded-md border">
+            <p className="text-center font-bold text-sm mb-2">{description}</p>
+            <div className="relative flex justify-center h-28">
+                {keyLayout.map((key, index) => {
+                    const isPressed = pressedNotes.includes(key.name);
+                    if (key.color === 'white') {
+                        return (
+                            <div key={key.name} className={`h-full w-8 border border-gray-300 rounded-b-sm relative ${isPressed ? 'bg-gray-200' : 'bg-white'}`}>
+                                <span className={`absolute bottom-1 left-1/2 -translate-x-1/2 text-xs text-black`}>{key.name}</span>
+                            </div>
+                        );
+                    }
+                    return null;
+                })}
+                <div className="absolute top-0 left-0 h-16 flex">
+                    {keyLayout.map((key, index) => {
+                         const isPressed = pressedNotes.includes(key.name);
+                         if (key.color === 'black') {
+                            const marginLeft = index === 1 ? '5' : index === 3 ? '10' : index === 6 ? '20' : index === 8 ? '25' : '30';
+                            return (
+                                <div key={key.name} style={{ marginLeft: `${marginLeft}px`}}
+                                     className={`h-full w-5 rounded-b-sm z-10 ${isPressed ? 'bg-primary' : 'bg-gray-800'}`}>
+                                      <span className="absolute bottom-1 left-1/2 -translate-x-1/2 text-xs text-white">{key.name}</span>
+                                </div>
+                            );
+                        }
+                        return null;
+                    })}
+                </div>
+            </div>
+        </div>
+    );
 }
 
 function ChordDiagramDisplay({ chordData }: { chordData: { frets?: string; notes?: string; description: string; instrument: string; }; }) { const { frets, notes, description, instrument } = chordData; if ((instrument === "harmonium" || instrument === "piano") && notes) { return <PianoChordDiagram notes={notes} description={description} />; } if (!frets) return null; const numStrings = instrument === "ukulele" ? 4 : 6; const numFrets = 5; const width = instrument === "ukulele" ? 80 : 100; const height = 120; const paddingTop = 20; const paddingLeft = 10; const stringSpacing = (width - paddingLeft * 2) / (numStrings - 1); const fretSpacing = (height - paddingTop) / numFrets; return (<div className="p-2 bg-card rounded-md border"><p className="text-center font-bold text-sm mb-1">{description}</p><p className="text-center text-xs text-muted-foreground mb-2 capitalize">{instrument}</p><svg width={width} height={height} viewBox={`0 0 ${width} ${height}`}>{ [...Array(numFrets + 1)].map((_, i) => (<line key={i} x1={paddingLeft} y1={paddingTop + i * fretSpacing} x2={width - paddingLeft} y2={paddingTop + i * fretSpacing} stroke="currentColor" strokeWidth={i === 0 ? "2" : "0.5"} />))}{[...Array(numStrings)].map((_, i) => (<line key={i} x1={paddingLeft + i * stringSpacing} y1={paddingTop} x2={paddingLeft + i * stringSpacing} y2={height} stroke="currentColor" strokeWidth="0.5" />))}{frets.split("").map((fret, stringIndex) => { const fretNum = fret === "x" || fret === "X" ? -1 : parseInt(fret, 10); if (fretNum > 0) { return (<circle key={stringIndex} cx={paddingLeft + stringIndex * stringSpacing} cy={paddingTop + (fretNum - 0.5) * fretSpacing} r={stringSpacing / 3.5} fill="currentColor" />); } return null; })}{frets.split("").map((fret, stringIndex) => { if (fret === "x" || fret === "X") { return (<text key={stringIndex} x={paddingLeft + stringIndex * stringSpacing} y={paddingTop - 5} textAnchor="middle" fontSize="10" fill="currentColor">×</text>); } if (fret === "0") { return (<circle key={stringIndex} cx={paddingLeft + stringIndex * stringSpacing} cy={paddingTop - 8} r={3} stroke="currentColor" fill="none" strokeWidth="1" />); } return null; })}</svg></div>); }
@@ -73,14 +105,12 @@ function InfoPage({ title, children }: { title: string; children: React.ReactNod
 function BhajanListScreen() {
     const [searchQuery, setSearchQuery] = useState("");
     
-    // ✅ ИСПРАВЛЕНИЕ: Логика загрузки и кэширования разделена
     const { data: bhajans, isLoading, isError, isSuccess } = useQuery({
       queryKey: ["bhajans", searchQuery], 
       queryFn: () => apiClient.listBhajans({ search: searchQuery }),
       retry: 1,
     });
   
-    // Используем useEffect для кэширования данных только на клиенте и только после успешной загрузки
     useEffect(() => {
         if (isSuccess && bhajans) {
             console.log("Data fetched successfully, caching...");
@@ -124,31 +154,4 @@ function BhajanListScreen() {
 function BhajanDetailScreen() { const navigate = useNavigate(); const { id } = useParams<{ id: string }>(); const [selectedInstrument, setSelectedInstrument] = useState("guitar"); const [activeTab, setActiveTab] = useState("lyrics"); const audio = useAudio(); const { data: bhajan } = useQuery(["bhajan", id], () => apiClient.getBhajanDetail({ id: id! }), { enabled: !!id }); const { toggleFavorite, isFavorite } = useFavorites(); if (!bhajan) return <div className="flex items-center justify-center h-screen"><Music className="h-12 w-12 text-muted-foreground mx-auto mb-4" /><p>Loading...</p></div>; const playAudio = async (url: string, type: 'snippet' | 'analysis') => { await audio.play({ id: `${bhajan.id}-${type}`, title: `${bhajan.title} (${type})`, author: bhajan.author, audioUrl: url }); }; return (<div className="pb-32"><header className="sticky top-0 bg-background/95 backdrop-blur-sm border-b border-border p-4 zen-shadow"><div className="flex items-center gap-4 mb-4"><Button variant="ghost" size="sm" onClick={() => navigate(-1)}><ArrowLeft className="h-4 w-4" /></Button><div className="flex-1"><h1 className="text-xl font-medium zen-heading">{bhajan.title}</h1><p className="text-sm text-muted-foreground">{bhajan.author}</p></div><Button variant="ghost" size="sm" onClick={() => toggleFavorite(bhajan.id)}><Heart className={`h-5 w-5 ${isFavorite(bhajan.id) ? "fill-current text-red-500" : ""}`} /></Button></div><div className="flex gap-2 mb-4 flex-wrap">{bhajan.hasAudio && bhajan.snippetUrl && <Button variant="outline" size="sm" onClick={() => playAudio(bhajan.snippetUrl!, 'snippet')}><Music4 className="h-4 w-4 mr-2" />Play Snippet</Button>}{bhajan.hasAnalyses && bhajan.analysisUrl && <Button variant="outline" size="sm" onClick={() => playAudio(bhajan.analysisUrl!, 'analysis')}><BookOpen className="h-4 w-4 mr-2" />Play Analysis</Button>}{bhajan.hasLessons && <Button variant="outline" size="sm" onClick={() => navigate(`/bhajan/${bhajan.id}/lessons`)}><BookOpen className="h-4 w-4 mr-2" />View Lessons</Button>}</div><Select value={selectedInstrument} onValueChange={setSelectedInstrument}><SelectTrigger className="w-full"><SelectValue placeholder="Select instrument" /></SelectTrigger><SelectContent><SelectItem value="guitar">Guitar</SelectItem><SelectItem value="ukulele">Ukulele</SelectItem><SelectItem value="harmonium">Piano/Harmonium</SelectItem></SelectContent></Select></header><div className="p-4"><Tabs value={activeTab} onValueChange={setActiveTab}><TabsList className="grid w-full grid-cols-2"><TabsTrigger value="lyrics">Lyrics</TabsTrigger><TabsTrigger value="translation">Translation</TabsTrigger></TabsList><TabsContent value="lyrics" className="mt-6"><div className="space-y-4">{bhajan.lyricsWithChords.map((section, index) => (<div key={index} className="space-y-2">{section.chords && <div className="text-sm font-mono text-primary flex flex-wrap gap-x-4 gap-y-2">{section.chords.split(/\s+/).map((chord, i) => chord ? <Chord key={i} name={chord} instrument={selectedInstrument} /> : null)}</div>}<div className="zen-body whitespace-pre-line leading-relaxed">{section.lyrics.split(' ').map((word, wordIndex) => (<React.Fragment key={wordIndex}><Word>{word}</Word>{' '}</React.Fragment>))}</div></div>))}</div></TabsContent><TabsContent value="translation" className="mt-6"><div className="zen-body whitespace-pre-line">{bhajan.translation}</div></TabsContent></Tabs></div></div>); }
 function LessonsScreen() { const navigate = useNavigate(); const { id } = useParams<{ id: string }>(); const { data: bhajan } = useQuery(["bhajan", id], () => apiClient.getBhajanDetail({ id: id! }), { enabled: !!id }); if (!bhajan) return <div>Loading...</div>; if (!bhajan.lessonsUrl) return <div className="p-4">No lessons available. <Button onClick={() => navigate(-1)}>Back</Button></div>; const videoId = extractYouTubeVideoId(bhajan.lessonsUrl); return (<div className="pb-32"><header className="sticky top-0 bg-background/95 backdrop-blur-sm border-b border-border p-4 zen-shadow"><div className="flex items-center gap-4"><Button variant="ghost" size="sm" onClick={() => navigate(-1)}><ArrowLeft className="h-4 w-4" /></Button><div className="flex-1"><h1 className="text-xl font-medium zen-heading">Lessons</h1><p className="text-sm text-muted-foreground">{bhajan.title}</p></div></div></header><div className="p-4">{videoId ? (<div className="space-y-4"><div className="aspect-video w-full bg-muted rounded-lg overflow-hidden"><iframe src={`https://www.youtube.com/embed/${videoId}`} title={`${bhajan.title} - Lessons`} className="w-full h-full border-0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowFullScreen /></div></div>) : (<div className="text-center py-12"><p>Video lesson available.</p><Button asChild><a href={bhajan.lessonsUrl} target="_blank" rel="noopener noreferrer">Open Lesson</a></Button></div>)}</div></div>); }
 function FavoritesScreen() { const { favoriteIds } = useFavorites(); const { data: allBhajans = [], isLoading } = useQuery(["bhajans", ""], () => apiClient.listBhajans({})); const favoriteBhajans = allBhajans.filter(bhajan => favoriteIds.includes(bhajan.id)); return (<div className="pb-32"><header className="sticky top-0 bg-background/95 backdrop-blur-sm border-b border-border p-4 zen-shadow"><h1 className="text-2xl font-light zen-heading text-center">Favorites</h1></header><div className="p-4 space-y-3">{isLoading && <div>Loading...</div>}{!isLoading && favoriteBhajans.length === 0 && <div className="text-center py-12"><Heart className="h-12 w-12 text-muted-foreground mx-auto mb-4" /><p>No favorite bhajans yet.</p></div>}<AnimatePresence>{favoriteBhajans.map((bhajan) => <BhajanCard key={bhajan.id} bhajan={bhajan} />)}</AnimatePresence></div></div>); }
-function SettingsScreen() { const navigate = useNavigate(); return (<div className="pb-32"><header className="sticky top-0 bg-background/95 backdrop-blur-sm border-b border-border p-4 zen-shadow"><h1 className="text-2xl font-light zen-heading text-center">Settings</h1></header><div className="p-4 space-y-6"><Card><CardHeader><CardTitle className="flex items-center gap-2"><Info className="h-5 w-5" />Information</CardTitle></CardHeader><CardContent className="space-y-1"><Button variant="ghost" className="w-full justify-start" onClick={() => navigate("/about")}>About Us</Button><Button variant="ghost" className="w-full justify-start" onClick={() => navigate("/projects")}>Our Projects</Button><Button variant="ghost" className="w-full justify-start" onClick={() => navigate("/contact")}>Contact Us</Button></CardContent></Card><Card><CardHeader><CardTitle>Support & Contribution</CardTitle></CardHeader><CardContent className="space-y-3"><Button variant="outline" className="w-full" onClick={() => navigate("/donate")}><DollarSign className="h-4 w-4 mr-2" />Donate</Button><Button variant="outline" className="w-full" asChild><a href="https://forms.gle/S4bTDSuyRTBpPy7X8" target="_blank" rel="noopener noreferrer"><Plus className="h-4 w-4 mr-2" />Add a Bhajan</a></Button></CardContent></Card></div></div>); }
-
-// ГЛАВНЫЙ КОМПОНЕНТ С МАРШРУТАМИ
-function BhajanSangamApp() {
-  return (
-    <Router>
-      <div className="min-h-screen bg-background text-foreground">
-        <Routes>
-          <Route path="/" element={<BhajanListScreen />} />
-          <Route path="/bhajan/:id" element={<BhajanDetailScreen />} />
-          <Route path="/bhajan/:id/lessons" element={<LessonsScreen />} />
-          <Route path="/favorites" element={<FavoritesScreen />} />
-          <Route path="/settings" element={<SettingsScreen />} />
-          <Route path="/about" element={<InfoPage title="About Us"><p className="lead">BhajanApp — приложение для тех, кто стремится глубже погрузиться в культуру бхаджанов и киртанов.</p><h3 className="mt-6">Основные Функции:</h3><ul className="list-disc list-inside space-y-2 mt-4"><li><b>База бхаджанов наших ачарьев:</b> В Bhajan App собрана обширная коллекция бхаджанов и киртанов.</li><li><b>Лекции для глубокого погружения:</b> Вместе с каждым бхаджаном предоставляются лекции для углубленного понимания.</li><li><b>Литературные и пословные переводы:</b> Каждый бхаджан снабжен несколькими видами переводов.</li><li><b>Аккорды и видеоуроки:</b> Приложение предлагает аккорды и видеоуроки для обучения.</li></ul><p className="mt-4">Bhajan App - это погружение в духовное наследие вайшнавской традиции.</p></InfoPage>} />
-          <Route path="/projects" element={<InfoPage title="Our Projects"><ul className="space-y-4"><li><a href="https://omhome.space/dandavat_wear" target="_blank" rel="noopener noreferrer" className="font-bold hover:underline">Dandavat Wear</a> — Бренд вайшнавской одежды.</li><li><a href="https://omhome.space/" target="_blank" rel="noopener noreferrer" className="font-bold hover:underline">OmHome</a> — Пространство благостных мероприятий.</li><li><a href="https://gaudiobooks.ru" target="_blank" rel="noopener noreferrer" className="font-bold hover:underline">Gaudiobooks</a> — Вайшнавские аудиокниги и приложения.</li><li><a href="https://omhome.space/music" target="_blank" rel="noopener noreferrer" className="font-bold hover:underline">Вайшнавские Мантры</a>.</li><li><a href="https://omhome.space/hip-hop" target="_blank" rel="noopener noreferrer" className="font-bold hover:underline">Вайшнавский Hip-Hop</a>.</li></ul></InfoPage>} />
-          <Route path="/contact" element={<InfoPage title="Contact Us"><ul className="space-y-2"><li>Telegram: <a href="https://t.me/artartemev" target="_blank" rel="noopener noreferrer" className="hover:underline">@artartemev</a></li><li>Email: <a href="mailto:me@artartemev.ru" className="hover:underline">me@artartemev.ru</a></li><li>Instagram: <a href="https://instagram.com/artartemev" target="_blank" rel="noopener noreferrer" className="hover:underline">@artartemev</a></li></ul></InfoPage>} />
-          <Route path="/donate" element={<InfoPage title="Donation"><p>Вы можете поддержать наш проект, сделав пожертвование:</p><div className="mt-4 p-4 bg-muted rounded-lg space-y-2"><p><b>СБП (Яндекс банк):</b> <code>+79955970108</code></p><p><b>Сбербанк:</b> <code>2202206223424545</code></p><p><b>USDT (TRC20):</b> <code className="break-all">TUTZBW9sH341B7Rz43UnTU9sjVdbTCN1F5</code></p><p><b>ByBit UID:</b> <code>115189352</code></p></div></InfoPage>} />
-        </Routes>
-        <AudioPlayerBar />
-        <BottomNavigation />
-      </div>
-    </Router>
-  );
-}
-
-// Динамический импорт
-const NoSsrApp = dynamic(() => Promise.resolve(BhajanSangamApp), { ssr: false });
-export default NoSsrApp;
+function SettingsScreen() { const navigate = useNavigate(); return (<div className="pb-32"><header className="sticky top-0 bg-background/95 backdrop-blur-sm border-b border-border p-4 zen-shadow"><h1 className="text-2xl font-light zen-heading text-center">Settings</h1></header><div className="p-4 space-y-6"><Card><CardHeader><CardTitle className="flex items-center gap
