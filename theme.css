@@ -1,43 +1,173 @@
-// File: pages/_app.tsx (версия с тегами для Apple)
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
-import type { AppProps } from 'next/app';
-import Head from 'next/head'; // ✅ 1. Импортируем Head
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import React from 'react';
-import { AudioProvider } from './index';
-import '../theme.css'; 
+@layer base {
+  :root {
+    /* Zen Minimalist Color Palette - Light Mode */
+    --background: 0 0% 100%; /* Soft off-white */
+    --foreground: 222.2 84% 4.9%; /* Deep charcoal for text */
+    --card: 0 0% 100%; /* Pure white for cards */
+    --card-foreground: 222.2 84% 4.9%; /* Deep charcoal */
+    --popover: 0 0% 100%; /* Pure white */
+    --popover-foreground: 222.2 84% 4.9%; /* Deep charcoal */
+    --primary: 222.2 47.4% 11.2%; /* Warm earth brown for devotional feel */
+    --primary-foreground: 210 40% 98%; /* Soft off-white */
+    --secondary: 210 40% 96.1%; /* Warm light beige */
+    --secondary-foreground: 222.2 47.4% 11.2%; /* Dark gray */
+    --muted: 210 40% 96.1%; /* Very light gray */
+    --muted-foreground: 215.4 16.3% 46.9%; /* Medium gray */
+    --accent: 210 40% 96.1%; /* Soft warm accent */
+    --accent-foreground: 222.2 47.4% 11.2%; /* Dark gray */
+    --destructive: 0 84.2% 60.2%; /* Muted red */
+    --destructive-foreground: 210 40% 98%; /* Soft off-white */
+    --border: 214.3 31.8% 91.4%; /* Light gray border */
+    --input: 214.3 31.8% 91.4%; /* Light gray input border */
+    --ring: 222.2 84% 4.9%; /* Primary color for focus rings */
+    --radius: 0.5rem; /* Slightly rounded for zen aesthetic */
+    
+    /* Custom devotional colors */
+    --devotional-saffron: 35 85% 65%; /* Sacred saffron */
+    --devotional-lotus: 320 25% 85%; /* Soft lotus pink */
+    --devotional-earth: 25 20% 35%; /* Deep earth brown */
+    --devotional-sky: 210 15% 92%; /* Peaceful sky blue */ --chart-1: 12 76% 61%; --chart-2: 173 58% 39%; --chart-3: 197 37% 24%; --chart-4: 43 74% 66%; --chart-5: 27 87% 67%;
+  }
 
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      staleTime: 5 * 60 * 1000, // 5 minutes
-      refetchOnWindowFocus: false,
-    },
-  },
-});
+  .dark {
+    /* Zen Minimalist Color Palette - Dark Mode */
+    --background: 222.2 84% 4.9%; /* Deep charcoal background */
+    --foreground: 210 40% 98%; /* Light gray text */
+    --card: 222.2 84% 4.9%; /* Dark card background */
+    --card-foreground: 210 40% 98%; /* Light gray */
+    --popover: 222.2 84% 4.9%; /* Dark popover */
+    --popover-foreground: 210 40% 98%; /* Light gray */
+    --primary: 210 40% 98%; /* Warmer brown for dark mode */
+    --primary-foreground: 222.2 47.4% 11.2%; /* Deep charcoal */
+    --secondary: 217.2 32.6% 17.5%; /* Dark secondary */
+    --secondary-foreground: 210 40% 98%; /* Light gray */
+    --muted: 217.2 32.6% 17.5%; /* Dark muted */
+    --muted-foreground: 215 20.2% 65.1%; /* Medium light gray */
+    --accent: 217.2 32.6% 17.5%; /* Dark accent */
+    --accent-foreground: 210 40% 98%; /* Light gray */
+    --destructive: 0 62.8% 30.6%; /* Slightly brighter red for dark mode */
+    --destructive-foreground: 210 40% 98%; /* Light gray */
+    --border: 217.2 32.6% 17.5%; /* Dark border */
+    --input: 217.2 32.6% 17.5%; /* Dark input border */
+    --ring: 212.7 26.8% 83.9%; /* Primary color for focus rings */
+    
+    /* Custom devotional colors for dark mode */
+    --devotional-saffron: 35 70% 55%; /* Muted saffron for dark mode */
+    --devotional-lotus: 320 20% 25%; /* Deep lotus for dark mode */
+    --devotional-earth: 25 25% 55%; /* Lighter earth for dark mode */
+    --devotional-sky: 210 20% 20%; /* Dark peaceful sky */ --chart-1: 220 70% 50%; --chart-2: 160 60% 45%; --chart-3: 30 80% 55%; --chart-4: 280 65% 60%; --chart-5: 340 75% 55%;
+  }
 
-function MyApp({ Component, pageProps }: AppProps) {
-  return (
-    <QueryClientProvider client={queryClient}>
-      {/* ✅ 2. Добавляем Head с мета-тегами и ссылкой на иконку */}
-      <Head>
-        <title>Bhajan Sangam</title>
-        <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-        
-        {/* Эти теги делают приложение похожим на нативное на iOS */}
-        <meta name="apple-mobile-web-app-capable" content="yes" />
-        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-        <meta name="apple-mobile-web-app-title" content="Bhajan Sangam" />
+  * {
+    @apply border-border;
+  }
 
-        {/* Ссылка на иконку для главного экрана Apple */}
-        <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
-      </Head>
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    line-height: 1.6;
 
-      <AudioProvider>
-        <Component {...pageProps} />
-      </AudioProvider>
-    </QueryClientProvider>
-  );
+    /* ✅ ИСПРАВЛЕНИЕ: Добавляем отступы для безопасной зоны на iOS */
+    padding-top: env(safe-area-inset-top);
+  }
+
+  /* Custom devotional theme classes */
+  .devotional-saffron {
+    color: hsl(var(--devotional-saffron));
+  }
+
+  .bg-devotional-saffron {
+    background-color: hsl(var(--devotional-saffron));
+  }
+
+  .devotional-lotus {
+    color: hsl(var(--devotional-lotus));
+  }
+
+  .bg-devotional-lotus {
+    background-color: hsl(var(--devotional-lotus));
+  }
+
+  .devotional-earth {
+    color: hsl(var(--devotional-earth));
+  }
+
+  .bg-devotional-earth {
+    background-color: hsl(var(--devotional-earth));
+  }
+
+  .devotional-sky {
+    color: hsl(var(--devotional-sky));
+  }
+
+  .bg-devotional-sky {
+    background-color: hsl(var(--devotional-sky));
+  }
+
+  /* Zen-inspired typography */
+  .zen-heading {
+    font-weight: 300;
+    letter-spacing: 0.025em;
+    line-height: 1.2;
+  }
+
+  .zen-body {
+    font-weight: 400;
+    letter-spacing: 0.01em;
+    line-height: 1.7;
+  }
+
+  /* Minimalist focus states */
+  .zen-focus {
+    @apply focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background;
+  }
+
+  /* Subtle shadows for depth */
+  .zen-shadow {
+    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05), 0 1px 2px 0 rgba(0, 0, 0, 0.03);
+  }
+
+  .zen-shadow-lg {
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+  }
+
+  /* Audio player specific styling */
+  .audio-player-bg {
+    background: linear-gradient(135deg, hsl(var(--card)) 0%, hsl(var(--muted)) 100%);
+    backdrop-filter: blur(10px);
+  }
+
+  /* Bhajan card styling */
+  .bhajan-card {
+    @apply bg-card border border-border rounded-lg zen-shadow transition-all duration-200;
+  }
+
+  .bhajan-card:hover {
+    @apply zen-shadow-lg;
+    transform: translateY(-1px);
+  }
+
+  /* Chord tooltip styling */
+  .chord-tooltip {
+    @apply bg-popover text-popover-foreground border border-border rounded-md zen-shadow-lg;
+    font-family: 'Courier New', monospace;
+  }
+
+  /* Filter tag styling */
+  .filter-tag {
+    @apply bg-secondary text-secondary-foreground border border-border rounded-full px-3 py-1 text-sm transition-colors;
+  }
+
+  .filter-tag.active {
+    @apply bg-primary text-primary-foreground;
+  }
+
+  .filter-tag:hover {
+    @apply bg-accent text-accent-foreground;
+  }
 }
-
-export default MyApp;
