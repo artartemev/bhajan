@@ -87,3 +87,15 @@ model BhajanSubmission {
 
   @@map("bhajan_submissions")
 }
+model Word {
+  id                 String    @id @default(cuid())
+  sourceText         String    @unique // Само слово, которое мы переводим
+  sourceLanguage     String
+  transliteration    String
+  russianTranslation String
+  englishTranslation String
+  spiritualMeaning   String?
+  isProperNoun       Boolean
+  confidence         String
+  createdAt          DateTime  @default(now())
+}
