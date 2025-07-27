@@ -110,8 +110,8 @@ function BhajanListScreen() {
                     <div>
                         <Label className="text-sm font-medium mb-2 block">Author</Label>
                         <div className="flex gap-2">
-                            <FilterButton label="B.V. Thakur" value="Bhaktivinod Thakur" selectedValues={selectedAuthors} onToggle={(v) => toggleFilter(v, selectedAuthors, setSelectedAuthors)} />
-                            <FilterButton label="N.D. Thakur" value="Narottam Das Thakur" selectedValues={selectedAuthors} onToggle={(v) => toggleFilter(v, selectedAuthors, setSelectedAuthors)} />
+                            <FilterButton label="Bhaktivinod Thakur" value="Bhaktivinod Thakur" selectedValues={selectedAuthors} onToggle={(v) => toggleFilter(v, selectedAuthors, setSelectedAuthors)} />
+                            <FilterButton label="Narottam Das Thakur" value="Narottam Das Thakur" selectedValues={selectedAuthors} onToggle={(v) => toggleFilter(v, selectedAuthors, setSelectedAuthors)} />
                         </div>
                     </div>
                     <div>
