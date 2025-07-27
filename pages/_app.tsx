@@ -1,17 +1,12 @@
-// File: pages/_app.tsx
+// File: pages/_app.tsx (версия с тегами для Apple)
 
 import type { AppProps } from 'next/app';
+import Head from 'next/head'; // ✅ 1. Импортируем Head
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import React from 'react';
-
-// Импортируем провайдер аудио из вашего основного файла
-// Обратите внимание на путь, он ведет на уровень выше, к pages/index.tsx
 import { AudioProvider } from './index';
-
-// Импортируем глобальные стили
 import '../theme.css'; 
 
-// Создаем клиент для React Query здесь, в глобальной области
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -24,6 +19,20 @@ const queryClient = new QueryClient({
 function MyApp({ Component, pageProps }: AppProps) {
   return (
     <QueryClientProvider client={queryClient}>
+      {/* ✅ 2. Добавляем Head с мета-тегами и ссылкой на иконку */}
+      <Head>
+        <title>Bhajan Sangam</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+        
+        {/* Эти теги делают приложение похожим на нативное на iOS */}
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        <meta name="apple-mobile-web-app-title" content="BhajanApp" />
+
+        {/* Ссылка на иконку для главного экрана Apple */}
+        <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+      </Head>
+
       <AudioProvider>
         <Component {...pageProps} />
       </AudioProvider>
