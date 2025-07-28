@@ -1,12 +1,41 @@
-// File: api.ts (версия с логикой фильтрации)
+// File: api.ts (финальная версия с исправлением для серверных запросов)
 
 const API_URL = 'https://bhajan.miracall.net/api';
 
-// ✅ ЗАПРОС: Добавили поле 'options' для фильтрации
 const LIST_BHAJANS_QUERY = `query Query { listBhajans { title author audioPath options } }`;
 const GET_BHAJAN_QUERY = `query GetBhajan($author: String!, $title: String!) { getBhajan(author: $author, title: $title) { author title chords text translation audioPath reviewPath lessons } }`;
 
-async function fetchViaProxy(query: string, variables?: Record<string, any>) { try { const response = await fetch('/api/bhajan-proxy', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query, variables }), }); if (!response.ok) throw new Error('Proxy request failed'); const json = await response.json(); if (json.errors) throw new Error(`GraphQL Error: ${JSON.stringify(json.errors)}`); return json.data; } catch (error) { console.error("Failed to fetch via proxy:", error); return { listBhajans: [], getBhajan: null }; } }
+// ✅ ИСПРАВЛЕНИЕ: Определяем базовый URL в зависимости от окружения
+const getBaseUrl = () => {
+  // Если код выполняется в браузере, window будет определен.
+  if (typeof window !== 'undefined') {
+    return ''; // В браузере используем относительный путь
+  }
+  // В ином случае (в скрипте Node.js), используем полный путь
+  return 'http://localhost:3000';
+};
+
+async function fetchViaProxy(query: string, variables?: Record<string, any>) {
+  const baseUrl = getBaseUrl();
+  const proxyUrl = `${baseUrl}/api/bhajan-proxy`;
+  
+  try {
+    const response = await fetch(proxyUrl, { // ✅ Используем полный URL
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query, variables }),
+    });
+    if (!response.ok) throw new Error(`Proxy request failed with status ${response.status}`);
+    const json = await response.json();
+    if (json.errors) throw new Error(`GraphQL Error: ${JSON.stringify(json.errors)}`);
+    return json.data;
+  } catch (error) {
+    console.error(`Failed to fetch via proxy at ${proxyUrl}:`, error);
+    return { listBhajans: [], getBhajan: null };
+  }
+}
+
+// ... (остальной код файла остается без изменений) ...
 
 type TransformedBhajan = {
   id: string;
@@ -15,11 +44,9 @@ type TransformedBhajan = {
   snippetUrl: string | undefined;
   tags: string[];
   isFavorite: boolean;
-  // ✅ ТИП: Добавили опции для фильтрации
   options: string[]; 
 };
 
-// ✅ ФУНКЦИЯ: Обновлена для приема фильтров
 export async function listBhajans(input: { 
   search?: string; 
   authors?: string[];
@@ -36,11 +63,9 @@ export async function listBhajans(input: {
     snippetUrl: bhajan.audioPath ? `https://bhajan.miracall.net${bhajan.audioPath}` : undefined,
     tags: ['Devotional'],
     isFavorite: false,
-    // ✅ ДАННЫЕ: Преобразуем строку 'options' в массив тегов
     options: (bhajan.options || "").split(' ').filter(Boolean), 
   }));
   
-  // ✅ ЛОГИКА: Добавлена фильтрация по авторам, типам и рагам
   if (input.search || input.authors?.length || input.types?.length || input.ragas?.length) {
     const q = input.search?.toLowerCase() || '';
     transformedBhajans = transformedBhajans.filter((b: TransformedBhajan) => {
@@ -55,7 +80,6 @@ export async function listBhajans(input: {
 
   return transformedBhajans;
 }
-
 
 export async function getBhajanDetail(input: { id: string }) {
   const decoded = decodeURIComponent(input.id).split('|'); const [title, author] = decoded;
