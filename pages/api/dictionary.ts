@@ -1,9 +1,7 @@
 // File: pages/api/dictionary.ts
 
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import prisma from '../../lib/prisma'; // ✅ ИСПОЛЬЗУЕМ ЕДИНЫЙ КЛИЕНТ
 
 export default async function handler(
   req: NextApiRequest,
@@ -16,8 +14,6 @@ export default async function handler(
   try {
     const words = await prisma.word.findMany();
     
-    // Преобразуем массив в объект для быстрого доступа на клиенте
-    // Формат: { "слово": {данные о переводе} }
     const dictionaryMap = words.reduce((acc, word) => {
       acc[word.sourceText] = word;
       return acc;
