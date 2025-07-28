@@ -9,9 +9,8 @@ import { motion, AnimatePresence } from "framer-motion";
 
 import { apiClient, inferRPCOutputType } from "../client/api";
 import { Popover, PopoverContent, PopoverTrigger, Button, Card, CardContent, CardHeader, CardTitle, Input, Label, Textarea, Badge, Tabs, TabsContent, TabsList, TabsTrigger, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Slider } from "../components/ui";
-import { getCachedBhajans, setCachedBhajans } from '../lib/db';
+import { getCachedBhajans, setCachedBhajans, fetchAndCacheDictionary } from '../lib/db';
 import { Word } from "../components/Word";
-import { populateDictionaryInBackground } from "../lib/dictionary";
 
 type Bhajan = inferRPCOutputType<"listBhajans">[0];
 const AudioContext = createContext<any>(null);
@@ -58,6 +57,10 @@ function BhajanListScreen() {
     const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
     const [selectedRagas, setSelectedRagas] = useState<string[]>([]);
 
+    useEffect(() => {
+        fetchAndCacheDictionary();
+    }, []);
+
     const toggleFilter = (value: string, selected: string[], setSelected: React.Dispatch<React.SetStateAction<string[]>>) => {
         setSelected(prev => prev.includes(value) ? prev.filter(item => item !== value) : [...prev, value]);
     };
@@ -68,7 +71,8 @@ function BhajanListScreen() {
       retry: 1,
     });
   
-    useEffect(() => { if (isSuccess && bhajans) { setCachedBhajans(bhajans); populateDictionaryInBackground(bhajans); } }, [isSuccess, bhajans]);
+    useEffect(() => { if (isSuccess && bhajans) { setCachedBhajans(bhajans); } }, [isSuccess, bhajans]);
+    
     const { data: cachedBhajansData } = useQuery({ queryKey: ["cachedBhajans"], queryFn: getCachedBhajans, enabled: isError });
     const displayData = isError ? cachedBhajansData?.data : bhajans;
     const areFiltersActive = selectedAuthors.length > 0 || selectedTypes.length > 0 || selectedRagas.length > 0;
@@ -91,7 +95,7 @@ function BhajanListScreen() {
           {showFilters && (
             <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
                 <div className="space-y-4 pt-4">
-                    <div><Label className="text-sm font-medium mb-2 block">Author</Label><div className="flex gap-2"><FilterButton label="B.V. Thakur" value="Bhaktivinod Thakur" selectedValues={selectedAuthors} onToggle={(v) => toggleFilter(v, selectedAuthors, setSelectedAuthors)} /><FilterButton label="N.D. Thakur" value="Narottam Das Thakur" selectedValues={selectedAuthors} onToggle={(v) => toggleFilter(v, selectedAuthors, setSelectedAuthors)} /></div></div>
+                    <div><Label className="text-sm font-medium mb-2 block">Author</Label><div className="flex gap-2 flex-wrap"><FilterButton label="B.V. Thakur" value="Bhaktivinod Thakur" selectedValues={selectedAuthors} onToggle={(v) => toggleFilter(v, selectedAuthors, setSelectedAuthors)} /><FilterButton label="N.D. Thakur" value="Narottam Das Thakur" selectedValues={selectedAuthors} onToggle={(v) => toggleFilter(v, selectedAuthors, setSelectedAuthors)} /></div></div>
                     <div><Label className="text-sm font-medium mb-2 block">Type</Label><div className="flex gap-2"><FilterButton label="Bhajan" value="bhajan" selectedValues={selectedTypes} onToggle={(v) => toggleFilter(v, selectedTypes, setSelectedTypes)} /><FilterButton label="Kirtan" value="kirtan" selectedValues={selectedTypes} onToggle={(v) => toggleFilter(v, selectedTypes, setSelectedTypes)} /></div></div>
                     <div><Label className="text-sm font-medium mb-2 block">Raga</Label><div className="flex gap-2"><FilterButton label="Morning" value="morning" selectedValues={selectedRagas} onToggle={(v) => toggleFilter(v, selectedRagas, setSelectedRagas)} /><FilterButton label="Afternoon" value="afternoon" selectedValues={selectedRagas} onToggle={(v) => toggleFilter(v, selectedRagas, setSelectedRagas)} /><FilterButton label="Evening" value="evening" selectedValues={selectedRagas} onToggle={(v) => toggleFilter(v, selectedRagas, setSelectedRagas)} /></div></div>
                 </div>
@@ -109,6 +113,7 @@ function BhajanListScreen() {
       </div>
     );
 }
+
 function BhajanDetailScreen() { const navigate = useNavigate(); const { id } = useParams<{ id: string }>(); const [selectedInstrument, setSelectedInstrument] = useState("guitar"); const [activeTab, setActiveTab] = useState("lyrics"); const audio = useAudio(); const { data: bhajan } = useQuery(["bhajan", id], () => apiClient.getBhajanDetail({ id: id! }), { enabled: !!id }); const { toggleFavorite, isFavorite } = useFavorites(); if (!bhajan) return <div className="flex items-center justify-center h-screen"><Music className="h-12 w-12 text-muted-foreground mx-auto mb-4" /><p>Loading...</p></div>; const playAudio = async (url: string, type: 'snippet' | 'analysis') => { await audio.play({ id: `${bhajan.id}-${type}`, title: `${bhajan.title} (${type})`, author: bhajan.author, audioUrl: url }); }; return (<div className="pb-32"><header className="sticky top-0 bg-background/95 backdrop-blur-sm border-b border-border p-4 zen-shadow"><div className="flex items-center gap-4 mb-4"><Button variant="ghost" size="sm" onClick={() => navigate(-1)}><ArrowLeft className="h-4 w-4" /></Button><div className="flex-1"><h1 className="text-xl font-medium zen-heading">{bhajan.title}</h1><p className="text-sm text-muted-foreground">{bhajan.author}</p></div><Button variant="ghost" size="sm" onClick={() => toggleFavorite(bhajan.id)}><Heart className={`h-5 w-5 ${isFavorite(bhajan.id) ? "fill-current text-red-500" : ""}`} /></Button></div><div className="flex gap-2 mb-4 flex-wrap">{bhajan.hasAudio && bhajan.snippetUrl && <Button variant="outline" size="sm" onClick={() => playAudio(bhajan.snippetUrl!, 'snippet')}><Music4 className="h-4 w-4 mr-2" />Play Snippet</Button>}{bhajan.hasAnalyses && bhajan.analysisUrl && <Button variant="outline" size="sm" onClick={() => playAudio(bhajan.analysisUrl!, 'analysis')}><BookOpen className="h-4 w-4 mr-2" />Play Analysis</Button>}{bhajan.hasLessons && <Button variant="outline" size="sm" onClick={() => navigate(`/bhajan/${bhajan.id}/lessons`)}><BookOpen className="h-4 w-4 mr-2" />View Lessons</Button>}</div><Select value={selectedInstrument} onValueChange={setSelectedInstrument}><SelectTrigger className="w-full"><SelectValue placeholder="Select instrument" /></SelectTrigger><SelectContent><SelectItem value="guitar">Guitar</SelectItem><SelectItem value="ukulele">Ukulele</SelectItem><SelectItem value="harmonium">Piano/Harmonium</SelectItem></SelectContent></Select></header><div className="p-4"><Tabs value={activeTab} onValueChange={setActiveTab}><TabsList className="grid w-full grid-cols-2"><TabsTrigger value="lyrics">Lyrics</TabsTrigger><TabsTrigger value="translation">Translation</TabsTrigger></TabsList><TabsContent value="lyrics" className="mt-6"><div className="space-y-4">{bhajan.lyricsWithChords.map((section, index) => (<div key={index} className="space-y-2">{section.chords && <div className="text-sm font-mono text-primary flex flex-wrap gap-x-4 gap-y-2">{section.chords.split(/\s+/).map((chord, i) => chord ? <Chord key={i} name={chord} instrument={selectedInstrument} /> : null)}</div>}<div className="zen-body whitespace-pre-line leading-relaxed">{section.lyrics.split(' ').map((word, wordIndex) => (<React.Fragment key={wordIndex}><Word>{word}</Word>{' '}</React.Fragment>))}</div></div>))}</div></TabsContent><TabsContent value="translation" className="mt-6"><div className="zen-body whitespace-pre-line">{bhajan.translation}</div></TabsContent></Tabs></div></div>); }
 
 function LessonsScreen() {
@@ -133,7 +138,13 @@ function LessonsScreen() {
                 {videoId ? (
                     <div className="space-y-4">
                         <div className="aspect-video w-full bg-muted rounded-lg overflow-hidden">
-                            <iframe src={`https://www.youtube.com/embed/${videoId}`} title={`${bhajan.title} - Lessons`} className="w-full h-full border-0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowFullScreen />
+                            <iframe 
+                                src={`https://www.youtube.com/embed/${videoId}`} 
+                                title={`${bhajan.title} - Lessons`} 
+                                className="w-full h-full border-0" 
+                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" 
+                                allowFullScreen 
+                            />
                         </div>
                     </div>
                 ) : (
