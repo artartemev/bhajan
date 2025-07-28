@@ -7,7 +7,7 @@
     "build": "next build",
     "export": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
     "vercel-build": "npx prisma generate && npx prisma migrate deploy && next build"
   },
   "dependencies": {
@@ -15,7 +15,6 @@
     "@capacitor/core": "^7.4.2",
     "@capacitor/ios": "^7.4.2",
     "@google/generative-ai": "^0.24.1",
-    "@prisma/client": "^6.12.0",
     "@radix-ui/react-label": "^2.1.7",
     "@radix-ui/react-popover": "^1.1.14",
     "@radix-ui/react-select": "^2.2.5",
@@ -28,7 +27,7 @@
     "framer-motion": "^11.3.17",
     "idb": "^8.0.3",
     "lucide-react": "^0.417.0",
-    "next": "^14.2.30",
+    "next": "14.2.5",
     "next-pwa": "^5.6.0",
     "react": "^18",
     "react-dom": "^18",
@@ -44,7 +43,7 @@
     "@types/react-dom": "^18",
     "autoprefixer": "^10.4.19",
     "postcss": "^8.4.39",
-    "prisma": "^6.12.0",
+    "prisma": "^5.17.0",
     "tailwindcss": "^3.4.6",
     "ts-node": "^10.9.2",
     "typescript": "^5"
