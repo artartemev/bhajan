@@ -1,8 +1,7 @@
 // File: lib/prisma.ts
 
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient } from '../prisma/generated/client'; // ✅ ИЗМЕНЯЕМ ПУТЬ ИМПОРТА
 
-// Это трюк, чтобы предотвратить создание множества экземпляров PrismaClient в режиме разработки
 declare global {
   var prisma: PrismaClient | undefined;
 }
