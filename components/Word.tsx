@@ -1,9 +1,9 @@
-// File: components/Word.tsx (версия с использованием IndexedDB)
+// File: components/Word.tsx (финальная версия, работает только с локальным словарем)
 import React from 'react';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { useQuery } from '@tanstack/react-query';
 import { Badge } from './ui/badge';
-import { getWordFromDb, setWordInDb } from '../lib/db'; // ✅ Импортируем функции для работы с БД
+import { getWordFromCachedDictionary } from '../lib/db'; // ✅ Используем новую функцию
 
 type WordAnalysis = {
   sourceLanguage: "sanskrit" | "bengali" | "unknown";
@@ -15,19 +15,6 @@ type WordAnalysis = {
   confidence: "high" | "medium" | "low";
 };
 
-// Функция запроса к AI остается как запасной вариант
-const fetchWordAnalysisFromApi = async (word: string): Promise<WordAnalysis> => {
-  const response = await fetch('/api/translate-word', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ word }),
-  });
-  if (!response.ok) {
-    throw new Error('Network response was not ok');
-  }
-  return response.json();
-};
-
 const cleanWord = (word: string) => {
   return word.toLowerCase().replace(/[.,!?;:"“]/g, '');
 };
@@ -36,30 +23,13 @@ export const Word = ({ children }: { children: string }) => {
   const [isOpen, setIsOpen] = React.useState(false);
   const cleaned = cleanWord(children);
 
-  // ✅ Обновленная логика useQuery
-  const { data, isLoading, isError } = useQuery<WordAnalysis>({
+  // ✅ УПРОЩЕННАЯ ЛОГИКА: Просто ищем слово в кэше
+  const { data, isLoading, isError } = useQuery<WordAnalysis | null>({
     queryKey: ['word', cleaned],
-    queryFn: async () => {
-      // 1. Сначала ищем слово в локальной базе
-      const cachedWord = await getWordFromDb(cleaned);
-      if (cachedWord) {
-        console.log(`Found "${cleaned}" in local DB.`);
-        return cachedWord;
-      }
-
-      // 2. Если не нашли, идем к API
-      console.log(`"${cleaned}" not in DB, fetching from API...`);
-      const apiData = await fetchWordAnalysisFromApi(cleaned);
-      
-      // 3. Сохраняем результат в базу для будущего использования
-      await setWordInDb({ word: cleaned, ...apiData });
-      console.log(`Saved "${cleaned}" to local DB.`);
-      
-      return apiData;
-    },
-    enabled: isOpen, // Запрос выполняется только при открытии Popover
+    queryFn: () => getWordFromCachedDictionary(cleaned),
+    enabled: isOpen,
     staleTime: Infinity,
-    retry: 1, // Попробовать еще раз в случае ошибки сети
+    retry: false,
   });
 
   if (cleaned.length < 3) {
@@ -72,8 +42,9 @@ export const Word = ({ children }: { children: string }) => {
         <span className="cursor-pointer text-primary hover:underline">{children}</span>
       </PopoverTrigger>
       <PopoverContent className="w-80" align="start">
-        {isLoading && <p>Анализ слова...</p>}
-        {isError && <p className="text-destructive">Не удалось проанализировать слово.</p>}
+        {isLoading && <p>Поиск в словаре...</p>}
+        {isError && <p className="text-destructive">Ошибка при поиске в словаре.</p>}
+        {!isLoading && !data && <p className="text-muted-foreground">Перевод для этого слова еще не добавлен в словарь.</p>}
         {data && (
           <div className="space-y-3">
             <div>
