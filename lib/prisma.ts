@@ -1,6 +1,6 @@
 // File: lib/prisma.ts
 
-import { PrismaClient } from '../prisma/generated/client'; // ✅ ИЗМЕНЯЕМ ПУТЬ ИМПОРТА
+import { PrismaClient } from '@prisma/client'; // ✅ ВОЗВРАЩАЕМ СТАНДАРТНЫЙ ИМПОРТ
 
 declare global {
   var prisma: PrismaClient | undefined;
