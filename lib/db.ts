@@ -1,27 +1,22 @@
-// File: lib/db.ts (финальная версия для работы с центральным словарем)
+// File: lib/db.ts (финальная корректная версия)
 import { openDB, IDBPDatabase } from 'idb';
 
 const DB_NAME = 'BhajanDB';
 const BHAJAN_STORE_NAME = 'bhajans';
-const WORD_STORE_NAME = 'words';
-const DICTIONARY_STORE_NAME = 'dictionary'; // ✅ Новое хранилище для всего словаря
-const VERSION = 3; // ✅ Увеличиваем версию для обновления схемы
+const DICTIONARY_STORE_NAME = 'dictionary';
+const VERSION = 3; 
 
-let dbPromise: Promise<IDBPDatabase> | null = null;
+let dbPromise: Promise<IDBPDatabase | null> | null = null;
 
 const getDb = () => {
   if (!dbPromise) {
     if (typeof window !== 'undefined') {
       dbPromise = openDB(DB_NAME, VERSION, {
         upgrade(db, oldVersion) {
-          if (oldVersion < 1) {
+          if (!db.objectStoreNames.contains(BHAJAN_STORE_NAME)) {
             db.createObjectStore(BHAJAN_STORE_NAME, { keyPath: 'id' });
           }
-          if (oldVersion < 2) {
-            db.createObjectStore(WORD_STORE_NAME, { keyPath: 'word' });
-          }
-          if (oldVersion < 3) {
-            // ✅ Создаем хранилище для одного объекта-словаря
+          if (!db.objectStoreNames.contains(DICTIONARY_STORE_NAME)) {
             db.createObjectStore(DICTIONARY_STORE_NAME, { keyPath: 'id' });
           }
         },
@@ -33,25 +28,41 @@ const getDb = () => {
   return dbPromise;
 };
 
-// Функции для бхаджанов (без изменений)
-export const getCachedBhajans = async () => { /* ... */ };
-export const setCachedBhajans = async (bhajans: any[]) => { /* ... */ };
+// Функции для работы с кэшем бхаджанов
+export const getCachedBhajans = async () => {
+  const db = await getDb();
+  if (!db) return null;
+  return db.get(BHAJAN_STORE_NAME, 'allBhajans');
+};
 
-// ✅ НОВЫЕ ФУНКЦИИ ДЛЯ СЛОВАРЯ
-// Скачиваем и кэшируем весь словарь с сервера
+export const setCachedBhajans = async (bhajans: any[]) => {
+  const db = await getDb();
+  if (!db) return;
+  return db.put(BHAJAN_STORE_NAME, { id: 'allBhajans', data: bhajans });
+};
+
+// Функции для работы с централизованным словарем
 export const fetchAndCacheDictionary = async () => {
   try {
+    const db = await getDb();
+    if (!db) return null;
+    
+    // Проверяем, есть ли словарь в кэше
+    const existingDictionary = await db.get(DICTIONARY_STORE_NAME, 'full_dictionary');
+    if (existingDictionary) {
+        console.log("Dictionary already cached.");
+        return existingDictionary.data;
+    }
+
+    // Если нет, скачиваем с сервера
     console.log("Fetching central dictionary from /api/dictionary...");
     const response = await fetch('/api/dictionary');
     if (!response.ok) throw new Error('Failed to fetch dictionary');
     
     const dictionaryData = await response.json();
     
-    const db = await getDb();
-    if (db) {
-      await db.put(DICTIONARY_STORE_NAME, { id: 'full_dictionary', data: dictionaryData });
-      console.log(`Successfully cached ${Object.keys(dictionaryData).length} words.`);
-    }
+    await db.put(DICTIONARY_STORE_NAME, { id: 'full_dictionary', data: dictionaryData });
+    console.log(`Successfully cached ${Object.keys(dictionaryData).length} words.`);
     return dictionaryData;
   } catch (error) {
     console.error("Could not fetch or cache dictionary:", error);
@@ -59,7 +70,6 @@ export const fetchAndCacheDictionary = async () => {
   }
 };
 
-// Получаем перевод слова из закэшированного словаря
 export const getWordFromCachedDictionary = async (word: string) => {
   const db = await getDb();
   if (!db) return null;
