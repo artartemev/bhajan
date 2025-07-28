@@ -1,4 +1,4 @@
-// File: pages/index.tsx (финальная корректная версия)
+// File: pages/index.tsx (финальная рабочая версия со всеми исправлениями)
 
 import React, { useState, useRef, useEffect, createContext, useContext } from "react";
 import dynamic from 'next/dynamic';
@@ -15,7 +15,16 @@ import { Word } from "../components/Word";
 type Bhajan = inferRPCOutputType<"listBhajans">[0];
 const AudioContext = createContext<any>(null);
 
-// ... (весь код до BhajanListScreen без изменений)
+// ХУКИ И ПРОВАЙДЕРЫ
+const useFavorites = () => {
+    const [favoriteIds, setFavoriteIds] = useState<string[]>([]);
+    const queryClient = useQueryClient();
+    useEffect(() => { const storedFavorites = localStorage.getItem('bhajanFavorites'); if (storedFavorites) { setFavoriteIds(JSON.parse(storedFavorites)); } }, []);
+    const toggleFavorite = (bhajanId: string) => { const newFavoriteIds = favoriteIds.includes(bhajanId) ? favoriteIds.filter(id => id !== bhajanId) : [...favoriteIds, bhajanId]; setFavoriteIds(newFavoriteIds); localStorage.setItem('bhajanFavorites', JSON.stringify(newFavoriteIds)); queryClient.invalidateQueries(); };
+    const isFavorite = (bhajanId: string) => favoriteIds.includes(bhajanId);
+    return { favoriteIds, toggleFavorite, isFavorite };
+};
+
 export function AudioProvider({ children }: { children: React.ReactNode }) {
     const audioRef = useRef<HTMLAudioElement>(null);
     const [currentTrack, setCurrentTrack] = useState<any>(null); const [isPlaying, setIsPlaying] = useState(false); const [currentTime, setCurrentTime] = useState(0); const [duration, setDuration] = useState(0); const [playbackRate, setPlaybackRate] = useState(1);
