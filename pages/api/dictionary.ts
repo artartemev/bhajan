@@ -1,7 +1,11 @@
 // File: pages/api/dictionary.ts
 
 import type { NextApiRequest, NextApiResponse } from 'next';
-import prisma from '../../lib/prisma'; // ✅ ИСПОЛЬЗУЕМ ЕДИНЫЙ КЛИЕНТ
+import prisma from '../../lib/prisma';
+
+// ✅ ЭТА СТРОКА РЕШАЕТ ПРОБЛЕМУ
+// Увеличиваем максимальное время выполнения функции до 60 секунд
+export const maxDuration = 60; 
 
 export default async function handler(
   req: NextApiRequest,
