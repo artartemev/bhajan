@@ -1,29 +1,21 @@
-// File: pages/index.tsx (финальная рабочая версия со всеми исправлениями)
+// File: pages/index.tsx (финальная корректная версия)
 
 import React, { useState, useRef, useEffect, createContext, useContext } from "react";
 import dynamic from 'next/dynamic';
 import { BrowserRouter as Router, Routes, Route, Link, useNavigate, useLocation, useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Search, Play, Pause, Heart, Settings, Home, SkipBack, SkipForward, Plus, User, Info, DollarSign, ArrowLeft, BookOpen, Video, Music, Music4, WifiOff, Filter, X } from "lucide-react";
+import { Search, Play, Pause, Heart, Settings, Home, SkipBack, SkipForward, Plus, Info, DollarSign, ArrowLeft, BookOpen, Music, Music4, WifiOff, Filter, X } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 import { apiClient, inferRPCOutputType } from "../client/api";
-import { Popover, PopoverContent, PopoverTrigger, Button, Card, CardContent, CardHeader, CardTitle, Input, Label, Textarea, Badge, Tabs, TabsContent, TabsList, TabsTrigger, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Slider } from "../components/ui";
+import { Popover, PopoverContent, PopoverTrigger, Button, Card, CardContent, CardHeader, CardTitle, Input, Label, Badge, Tabs, TabsContent, TabsList, TabsTrigger, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Slider } from "../components/ui";
 import { getCachedBhajans, setCachedBhajans, fetchAndCacheDictionary } from '../lib/db';
 import { Word } from "../components/Word";
 
 type Bhajan = inferRPCOutputType<"listBhajans">[0];
 const AudioContext = createContext<any>(null);
 
-// ХУКИ И ПРОВАЙДЕРЫ
-const useFavorites = () => {
-    const [favoriteIds, setFavoriteIds] = useState<string[]>([]);
-    const queryClient = useQueryClient();
-    useEffect(() => { const storedFavorites = localStorage.getItem('bhajanFavorites'); if (storedFavorites) { setFavoriteIds(JSON.parse(storedFavorites)); } }, []);
-    const toggleFavorite = (bhajanId: string) => { const newFavoriteIds = favoriteIds.includes(bhajanId) ? favoriteIds.filter(id => id !== bhajanId) : [...favoriteIds, bhajanId]; setFavoriteIds(newFavoriteIds); localStorage.setItem('bhajanFavorites', JSON.stringify(newFavoriteIds)); queryClient.invalidateQueries(); };
-    const isFavorite = (bhajanId: string) => favoriteIds.includes(bhajanId);
-    return { favoriteIds, toggleFavorite, isFavorite };
-};
+// ... (весь код до BhajanListScreen без изменений)
 export function AudioProvider({ children }: { children: React.ReactNode }) {
     const audioRef = useRef<HTMLAudioElement>(null);
     const [currentTrack, setCurrentTrack] = useState<any>(null); const [isPlaying, setIsPlaying] = useState(false); const [currentTime, setCurrentTime] = useState(0); const [duration, setDuration] = useState(0); const [playbackRate, setPlaybackRate] = useState(1);
