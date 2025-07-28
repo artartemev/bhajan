@@ -9,7 +9,6 @@ datasource db {
 // 2. Tells Prisma to generate the JavaScript client
 generator client {
   provider = "prisma-client-js"
-  output   = "./generated/client"
 }
 
 // 3. Your existing model for Bhajans
