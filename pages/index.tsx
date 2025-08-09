@@ -18,7 +18,7 @@ const AudioContext = createContext<any>(null);
 // ХУКИ И ПРОВАЙДЕРЫ
 const FavoritesContext = createContext<any>(null);
 
-function FavoritesProvider({ children }: { children: React.ReactNode }) {
+export function FavoritesProvider({ children }: { children: React.ReactNode }) {
     const [favoriteIds, setFavoriteIds] = useState<string[]>([]);
     const queryClient = useQueryClient();
 
