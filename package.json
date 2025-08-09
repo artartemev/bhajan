@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "npx prisma generate && next build",
     "export": "next build",
     "start": "next start",
     "lint": "next lint",
@@ -12,10 +12,12 @@
     "vercel-build": "npx prisma migrate deploy && next build"
   },
   "dependencies": {
+    "@capacitor/android": "^7.4.2",
     "@capacitor/cli": "^7.4.2",
     "@capacitor/core": "^7.4.2",
     "@capacitor/ios": "^7.4.2",
     "@google/generative-ai": "^0.24.1",
+    "@prisma/client": "^5.22.0",
     "@radix-ui/react-label": "^2.1.7",
     "@radix-ui/react-popover": "^1.1.14",
     "@radix-ui/react-select": "^2.2.5",

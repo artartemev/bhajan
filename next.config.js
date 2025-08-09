@@ -6,6 +6,8 @@ const withPWA = require('next-pwa')({
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // ✅ ДОБАВЬТЕ ЭТУ СТРОКУ
+  output: 'export', 
 };
 
 module.exports = withPWA(nextConfig);

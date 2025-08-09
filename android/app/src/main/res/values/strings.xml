@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">BhajanSangam</string>
+    <string name="title_activity_main">BhajanSangam</string>
+    <string name="package_name">com.bhajan.sangam</string>
+    <string name="custom_url_scheme">com.bhajan.sangam</string>
+</resources>
