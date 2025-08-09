@@ -5,15 +5,8 @@ import { PrismaClient, Prisma } from '@prisma/client';
 const prisma = new PrismaClient();
 
 // --- Типы данных ---
-
-// Тип для элемента списка бхаджанов (только нужные поля)
 export type IBhajanList = Prisma.PromiseReturnType<typeof getBhajanList>;
-
-// Тип для одного полного бхаджана
 export type IBhajan = Prisma.PromiseReturnType<typeof getBhajanDetail>;
-
-
-// --- Функции для работы с API ---
 
 /**
  * Получает отфильтрованный список бхаджанов.
@@ -29,23 +22,21 @@ export async function getBhajanList(input: {
 
   // Формируем условия для запроса в базу данных
   const where: Prisma.BhajanWhereInput = {
+    // Условия объединяются по "И"
     AND: [
-      // 1. Условие для поиска
+      // 1. Условие для поиска (только если search не пустой)
       search ? {
         OR: [
           { title: { contains: search, mode: 'insensitive' } },
-          { titleEn: { contains: 'search', mode: 'insensitive' } },
-          { author: { contains: 'search', mode: 'insensitive' } },
+          { author: { contains: search, mode: 'insensitive' } },
         ],
       } : {},
 
-      // 2. Условие для автора
+      // 2. Условие для автора (только если author выбран)
       author ? { author: { equals: author } } : {},
 
-      // 3. Условие для типа (например, 'bhajan' или 'kirtan')
+      // 3. Условие для тегов (type и raga)
       type ? { tags: { has: type } } : {},
-      
-      // 4. Условие для раги (например, 'morning')
       raga ? { tags: { has: raga } } : {},
     ],
   };
@@ -65,6 +56,7 @@ export async function getBhajanList(input: {
         title: 'asc'
       }
     });
+    // Возвращаем результат, гарантируя, что title не будет null
     return bhajans.map(b => ({ ...b, title: b.title || "Без названия" }));
   } catch (error) {
     console.error("Ошибка при получении списка бхаджанов:", error);
@@ -74,9 +66,9 @@ export async function getBhajanList(input: {
 
 /**
  * Получает полную информацию о бхаджане по его ID.
- * @param id - Уникальный идентификатор бхаджана.
  */
 export async function getBhajanDetail(id: string) {
+  if (!id) return null;
   try {
     const bhajan = await prisma.bhajan.findUnique({
       where: { id },
@@ -90,9 +82,8 @@ export async function getBhajanDetail(id: string) {
 
 /**
  * Получает схему аккорда.
- * (Ваша существующая логика)
  */
 export async function getChordDiagram(input: { chord: string; instrument: string; }) {
-    // Здесь должна быть ваша реальная логика получения аккордов
+    // Ваша существующая логика для получения аккордов
     return { found: false };
 }
