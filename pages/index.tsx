@@ -35,7 +35,7 @@ export function FavoritesProvider({ children }: { children: React.ReactNode }) {
                 ? currentIds.filter(id => id !== bhajanId)
                 : [...currentIds, bhajanId];
             localStorage.setItem('bhajanFavorites', JSON.stringify(newFavoriteIds));
-            // No need to invalidate queries here, the context will update the UI.
+            queryClient.invalidateQueries();
             return newFavoriteIds;
         });
     };
