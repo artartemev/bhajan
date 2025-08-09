@@ -1,6 +1,6 @@
 // File: pages/index.tsx (финальная рабочая версия с русским интерфейсом)
 
-import React, { useState, useRef, useEffect, createContext, useContext } from "react";
+import React, { useState, useRef, useEffect, createContext, useContext, useCallback, useMemo } from "react";
 import dynamic from 'next/dynamic';
 import { BrowserRouter as Router, Routes, Route, Link, useNavigate, useLocation, useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -29,7 +29,7 @@ export function FavoritesProvider({ children }: { children: React.ReactNode }) {
         }
     }, []);
 
-    const toggleFavorite = (bhajanId: string) => {
+    const toggleFavorite = useCallback((bhajanId: string) => {
         setFavoriteIds(currentIds => {
             const newFavoriteIds = currentIds.includes(bhajanId)
                 ? currentIds.filter(id => id !== bhajanId)
@@ -38,12 +38,20 @@ export function FavoritesProvider({ children }: { children: React.ReactNode }) {
             queryClient.invalidateQueries();
             return newFavoriteIds;
         });
-    };
+    }, [queryClient]);
 
-    const isFavorite = (bhajanId: string) => favoriteIds.includes(bhajanId);
+    const isFavorite = useCallback((bhajanId: string) => {
+        return favoriteIds.includes(bhajanId);
+    }, [favoriteIds]);
+
+    const value = useMemo(() => ({
+        favoriteIds,
+        toggleFavorite,
+        isFavorite
+    }), [favoriteIds, toggleFavorite, isFavorite]);
 
     return (
-        <FavoritesContext.Provider value={{ favoriteIds, toggleFavorite, isFavorite }}>
+        <FavoritesContext.Provider value={value}>
             {children}
         </FavoritesContext.Provider>
     );
