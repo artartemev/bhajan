@@ -4,7 +4,7 @@ import type { AppProps } from 'next/app';
 import Head from 'next/head'; // ✅ 1. Импортируем Head
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import React from 'react';
-import { AudioProvider } from './index';
+import { AudioProvider, FavoritesProvider } from './index';
 import '../theme.css'; 
 
 const queryClient = new QueryClient({
@@ -34,7 +34,9 @@ function MyApp({ Component, pageProps }: AppProps) {
       </Head>
 
       <AudioProvider>
-        <Component {...pageProps} />
+        <FavoritesProvider>
+          <Component {...pageProps} />
+        </FavoritesProvider>
       </AudioProvider>
     </QueryClientProvider>
   );
