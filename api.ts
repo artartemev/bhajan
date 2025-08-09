@@ -1,4 +1,4 @@
-// Файл: api.ts (с обновленной логикой фильтров)
+// Файл: api.ts (с логикой одиночных фильтров)
 
 import { Hono } from 'hono';
 import { z } from 'zod';
@@ -8,7 +8,7 @@ import { cors } from 'hono/cors';
 
 const prisma = new PrismaClient();
 
-// --- Схемы данных ---
+// --- Схемы данных (без изменений) ---
 const bhajanSchema = z.object({
   id: z.string(),
   title: z.string(),
@@ -40,9 +40,9 @@ const chordSchema = z.object({
 // --- Логика получения данных ---
 async function getBhajanList(input: {
   search?: string;
-  authors?: string[];
-  types?: string[];
-  ragas?: string[];
+  author?: string; // ✅ ИЗМЕНЕНИЕ: было authors: string[]
+  type?: string;   // ✅ ИЗМЕНЕНИЕ: было types: string[]
+  raga?: string;   // ✅ ИЗМЕНЕНИЕ: было ragas: string[]
 }) {
   try {
     const bhajans = await prisma.bhajan.findMany({
@@ -64,18 +64,10 @@ async function getBhajanList(input: {
         b.titleEn.toLowerCase().includes(searchLower) ||
         b.author.toLowerCase().includes(searchLower);
 
-      const authorMatch =
-        !input.authors?.length || input.authors.includes(b.author);
-
-      // ✅ ИЗМЕНЕНИЕ: .every() заменено на .some() для логики "ИЛИ"
-      const typeMatch =
-        !input.types?.length ||
-        input.types.some((type) => b.tags.includes(type));
-
-      // ✅ ИЗМЕНЕНИЕ: .every() заменено на .some() для логики "ИЛИ"
-      const ragaMatch =
-        !input.ragas?.length ||
-        input.ragas.some((raga) => b.tags.includes(raga));
+      // ✅ ИЗМЕНЕНИЕ: Логика для одиночного фильтра
+      const authorMatch = !input.author || b.author === input.author;
+      const typeMatch = !input.type || b.tags.includes(input.type);
+      const ragaMatch = !input.raga || b.tags.includes(input.raga);
 
       return searchMatch && authorMatch && typeMatch && ragaMatch;
     });
@@ -95,19 +87,13 @@ async function getBhajanDetail(id: string) {
 }
 
 async function getChordDiagram(input: { chord: string; instrument: string; }) {
-    // Ваша логика для аккордов...
-    // Для примера возвращаем заглушку
     return { found: false };
 }
 
 
 // --- Роутер Hono ---
 const app = new Hono().basePath('/api');
-
-app.use('*', cors({
-    origin: '*', // В целях безопасности лучше указать конкретный домен
-    allowMethods: ['GET', 'POST', 'OPTIONS'],
-}));
+app.use('*', cors({ origin: '*', allowMethods: ['GET', 'POST', 'OPTIONS'] }));
 
 
 // Роуты
@@ -116,15 +102,17 @@ const listBhajansRoute = app.get(
   zValidator(
     'query',
     z.object({
+      // ✅ ИЗМЕНЕНИЕ: Схемы для одиночных строковых параметров
       search: z.string().optional(),
-      authors: z.array(z.string()).optional().transform(v => v ? (Array.isArray(v) ? v : [v]) : []),
-      types: z.array(z.string()).optional().transform(v => v ? (Array.isArray(v) ? v : [v]) : []),
-      ragas: z.array(z.string()).optional().transform(v => v ? (Array.isArray(v) ? v : [v]) : []),
+      author: z.string().optional(),
+      type: z.string().optional(),
+      raga: z.string().optional(),
     })
   ),
   async (c) => {
-    const { search, authors, types, ragas } = c.req.valid('query')
-    const allBhajans = await getBhajanList({ search, authors, types, ragas })
+    // ✅ ИЗМЕНЕНИЕ: Получаем одиночные значения
+    const { search, author, type, raga } = c.req.valid('query')
+    const allBhajans = await getBhajanList({ search, author, type, raga })
     return c.json(allBhajans)
   }
 );
