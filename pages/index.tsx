@@ -82,7 +82,7 @@ function BhajanListScreen() {
     return (
       <div className="pb-32">
         <header className="sticky top-0 bg-background/95 backdrop-blur-sm border-b border-border p-4 zen-shadow z-20">
-          <h1 className="text-2xl font-light zen-heading text-center mb-4">Бхаджан Сангам</h1>
+          <h1 className="text-2xl font-light zen-heading text-center mb-4">BhajanApp</h1>
           {isError && (<div className="flex items-center justify-center gap-2 text-sm text-destructive mb-2 p-2 bg-destructive/10 rounded-md"><WifiOff className="h-4 w-4" /><span>Офлайн-режим. Данные могут быть устаревшими.</span></div>)}
           <div className="flex gap-2 mb-4">
             <div className="relative flex-grow">
