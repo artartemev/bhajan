@@ -16,14 +16,40 @@ type Bhajan = inferRPCOutputType<"listBhajans">[0];
 const AudioContext = createContext<any>(null);
 
 // ХУКИ И ПРОВАЙДЕРЫ
-const useFavorites = () => {
+const FavoritesContext = createContext<any>(null);
+
+function FavoritesProvider({ children }: { children: React.ReactNode }) {
     const [favoriteIds, setFavoriteIds] = useState<string[]>([]);
     const queryClient = useQueryClient();
-    useEffect(() => { const storedFavorites = localStorage.getItem('bhajanFavorites'); if (storedFavorites) { setFavoriteIds(JSON.parse(storedFavorites)); } }, []);
-    const toggleFavorite = (bhajanId: string) => { const newFavoriteIds = favoriteIds.includes(bhajanId) ? favoriteIds.filter(id => id !== bhajanId) : [...favoriteIds, bhajanId]; setFavoriteIds(newFavoriteIds); localStorage.setItem('bhajanFavorites', JSON.stringify(newFavoriteIds)); queryClient.invalidateQueries(); };
+
+    useEffect(() => {
+        const storedFavorites = localStorage.getItem('bhajanFavorites');
+        if (storedFavorites) {
+            setFavoriteIds(JSON.parse(storedFavorites));
+        }
+    }, []);
+
+    const toggleFavorite = (bhajanId: string) => {
+        setFavoriteIds(currentIds => {
+            const newFavoriteIds = currentIds.includes(bhajanId)
+                ? currentIds.filter(id => id !== bhajanId)
+                : [...currentIds, bhajanId];
+            localStorage.setItem('bhajanFavorites', JSON.stringify(newFavoriteIds));
+            queryClient.invalidateQueries();
+            return newFavoriteIds;
+        });
+    };
+
     const isFavorite = (bhajanId: string) => favoriteIds.includes(bhajanId);
-    return { favoriteIds, toggleFavorite, isFavorite };
-};
+
+    return (
+        <FavoritesContext.Provider value={{ favoriteIds, toggleFavorite, isFavorite }}>
+            {children}
+        </FavoritesContext.Provider>
+    );
+}
+
+const useFavorites = () => useContext(FavoritesContext);
 
 export function AudioProvider({ children }: { children: React.ReactNode }) {
     const audioRef = useRef<HTMLAudioElement>(null);
@@ -62,8 +88,22 @@ function BhajanListScreen() {
         fetchAndCacheDictionary();
     }, []);
 
-    const toggleFilter = (value: string, selected: string[], setSelected: React.Dispatch<React.SetStateAction<string[]>>) => {
-        setSelected(prev => prev.includes(value) ? prev.filter(item => item !== value) : [...prev, value]);
+    const toggleFilter = (category: 'authors' | 'types' | 'ragas', value: string) => {
+        const toggle = (current: string[], val: string) => current.includes(val) ? [] : [val];
+
+        if (category === 'authors') {
+            setSelectedAuthors(current => toggle(current, value));
+            setSelectedTypes([]);
+            setSelectedRagas([]);
+        } else if (category === 'types') {
+            setSelectedAuthors([]);
+            setSelectedTypes(current => toggle(current, value));
+            setSelectedRagas([]);
+        } else if (category === 'ragas') {
+            setSelectedAuthors([]);
+            setSelectedTypes([]);
+            setSelectedRagas(current => toggle(current, value));
+        }
     };
 
     const { data: bhajans, isLoading, isError, isSuccess } = useQuery({
@@ -96,9 +136,9 @@ function BhajanListScreen() {
           {showFilters && (
             <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
                 <div className="space-y-4 pt-4">
-                    <div><Label className="text-sm font-medium mb-2 block">Автор</Label><div className="flex gap-2 flex-wrap"><FilterButton label="Бхактивинод Тхакур" value="Bhaktivinod Thakur" selectedValues={selectedAuthors} onToggle={(v) => toggleFilter(v, selectedAuthors, setSelectedAuthors)} /><FilterButton label="Нароттам Дас Тхакур" value="Narottam Das Thakur" selectedValues={selectedAuthors} onToggle={(v) => toggleFilter(v, selectedAuthors, setSelectedAuthors)} /></div></div>
-                    <div><Label className="text-sm font-medium mb-2 block">Тип</Label><div className="flex gap-2"><FilterButton label="Бхаджан" value="bhajan" selectedValues={selectedTypes} onToggle={(v) => toggleFilter(v, selectedTypes, setSelectedTypes)} /><FilterButton label="Киртан" value="kirtan" selectedValues={selectedTypes} onToggle={(v) => toggleFilter(v, selectedTypes, setSelectedTypes)} /></div></div>
-                    <div><Label className="text-sm font-medium mb-2 block">Рага</Label><div className="flex gap-2"><FilterButton label="Утренняя" value="morning" selectedValues={selectedRagas} onToggle={(v) => toggleFilter(v, selectedRagas, setSelectedRagas)} /><FilterButton label="Дневная" value="afternoon" selectedValues={selectedRagas} onToggle={(v) => toggleFilter(v, selectedRagas, setSelectedRagas)} /><FilterButton label="Вечерняя" value="evening" selectedValues={selectedRagas} onToggle={(v) => toggleFilter(v, selectedRagas, setSelectedRagas)} /></div></div>
+                    <div><Label className="text-sm font-medium mb-2 block">Автор</Label><div className="flex gap-2 flex-wrap"><FilterButton label="Бхактивинод Тхакур" value="Bhaktivinod Thakur" selectedValues={selectedAuthors} onToggle={() => toggleFilter('authors', 'Bhaktivinod Thakur')} /><FilterButton label="Нароттам Дас Тхакур" value="Narottam Das Thakur" selectedValues={selectedAuthors} onToggle={() => toggleFilter('authors', 'Narottam Das Thakur')} /></div></div>
+                    <div><Label className="text-sm font-medium mb-2 block">Тип</Label><div className="flex gap-2"><FilterButton label="Бхаджан" value="bhajan" selectedValues={selectedTypes} onToggle={() => toggleFilter('types', 'bhajan')} /><FilterButton label="Киртан" value="kirtan" selectedValues={selectedTypes} onToggle={() => toggleFilter('types', 'kirtan')} /></div></div>
+                    <div><Label className="text-sm font-medium mb-2 block">Рага</Label><div className="flex gap-2"><FilterButton label="Утренняя" value="morning" selectedValues={selectedRagas} onToggle={() => toggleFilter('ragas', 'morning')} /><FilterButton label="Дневная" value="afternoon" selectedValues={selectedRagas} onToggle={() => toggleFilter('ragas', 'afternoon')} /><FilterButton label="Вечерняя" value="evening" selectedValues={selectedRagas} onToggle={() => toggleFilter('ragas', 'evening')} /></div></div>
                 </div>
             </motion.div>
           )}

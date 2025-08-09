@@ -78,6 +78,9 @@ export async function listBhajans(input: {
     });
   }
 
+  // Сортировка по названию
+  transformedBhajans.sort((a, b) => a.title.localeCompare(b.title));
+
   return transformedBhajans;
 }
 
