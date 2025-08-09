@@ -1,4 +1,4 @@
-// File: pages/index.tsx (финальная рабочая версия с русским интерфейсом)
+// File: pages/index.tsx (с логикой взаимоисключающих фильтров)
 
 import React, { useState, useRef, useEffect, createContext, useContext } from "react";
 import dynamic from 'next/dynamic';
@@ -15,7 +15,7 @@ import { Word } from "../components/Word";
 type Bhajan = inferRPCOutputType<"listBhajans">[0];
 const AudioContext = createContext<any>(null);
 
-// ХУКИ И ПРОВАЙДЕРЫ
+// ХУКИ И ПРОВАЙДЕРЫ (без изменений)
 const useFavorites = () => {
     const [favoriteIds, setFavoriteIds] = useState<string[]>([]);
     const queryClient = useQueryClient();
@@ -38,7 +38,7 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
 function useAudio() { return useContext(AudioContext); }
 function formatTime(seconds: number): string { const mins = Math.floor(seconds / 60); const secs = Math.floor(seconds % 60); return `${mins}:${secs.toString().padStart(2, "0")}`; }
 
-// КОМПОНЕНТЫ
+// КОМПОНЕНТЫ (без изменений, кроме FilterButton)
 function BottomNavigation() { const location = useLocation(); const navItems = [{ path: "/", icon: Home, label: "Бхаджаны" }, { path: "/favorites", icon: Heart, label: "Избранное" }, { path: "/settings", icon: Settings, label: "Настройки" }]; return (<nav className="fixed bottom-0 left-0 right-0 bg-card border-t border-border zen-shadow-lg"><div className="flex justify-around items-center h-16">{navItems.map((item) => { const isActive = location.pathname === item.path; return <Link key={item.path} to={item.path} className={`flex flex-col items-center justify-center flex-1 h-full transition-colors ${isActive ? "text-primary" : "text-muted-foreground hover:text-foreground"}`}><item.icon className="h-5 w-5" /><span className="text-xs mt-1">{item.label}</span></Link>; })}</div></nav>); }
 function AudioPlayerBar() { const audio = useAudio(); if (!audio.currentTrack) return null; return (<div className="fixed bottom-16 left-0 right-0 bg-card border-t border-border zen-shadow-lg p-4"><div className="flex items-center gap-4"><div className="flex-1 min-w-0"><h4 className="font-medium text-sm truncate">{audio.currentTrack.title}</h4><p className="text-xs text-muted-foreground truncate">{audio.currentTrack.author}</p></div><div className="flex items-center gap-2"><Button variant="ghost" size="sm" onClick={() => audio.seek(Math.max(0, audio.currentTime - 15))}><SkipBack className="h-4 w-4" /></Button><Button variant="ghost" size="sm" onClick={audio.isPlaying ? audio.pause : () => audio.play(audio.currentTrack)}>{audio.isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}</Button><Button variant="ghost" size="sm" onClick={() => audio.seek(Math.min(audio.duration, audio.currentTime + 15))}><SkipForward className="h-4 w-4" /></Button></div></div><div className="mt-2"><Slider value={[audio.currentTime]} max={audio.duration || 100} step={1} onValueChange={([value]) => audio.seek(value || 0)} className="w-full" /><div className="flex justify-between text-xs text-muted-foreground mt-1"><span>{formatTime(audio.currentTime)}</span><span>{formatTime(audio.duration)}</span></div></div></div>); }
 function BhajanCard({ bhajan }: { bhajan: Bhajan }) { const navigate = useNavigate(); const audio = useAudio(); const { toggleFavorite, isFavorite } = useFavorites(); const handlePlaySnippet = async (e: React.MouseEvent) => { e.stopPropagation(); if (bhajan.snippetUrl) { await audio.play({ id: bhajan.id, title: bhajan.title, author: bhajan.author, audioUrl: bhajan.snippetUrl }); } }; const handleToggleFavorite = (e: React.MouseEvent) => { e.stopPropagation(); toggleFavorite(bhajan.id); }; return (<motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="bhajan-card p-4 cursor-pointer" onClick={() => navigate(`/bhajan/${bhajan.id}`)}><div className="flex items-center justify-between"><div className="flex-1"><h3 className="font-medium zen-heading">{bhajan.title}</h3><p className="text-sm text-muted-foreground">{bhajan.author}</p></div><div className="flex items-center gap-2"><Button variant="ghost" size="sm" onClick={handleToggleFavorite} className={isFavorite(bhajan.id) ? "text-red-500" : ""}><Heart className={`h-4 w-4 ${isFavorite(bhajan.id) ? "fill-current" : ""}`} /></Button>{bhajan.snippetUrl && <Button variant="ghost" size="sm" onClick={handlePlaySnippet}><Play className="h-4 w-4" /></Button>}</div></div></motion.div>); }
@@ -48,27 +48,41 @@ function ChordContent({ chordName, instrument }: { chordName: string; instrument
 function Chord({ name, instrument }: { name: string; instrument: string }) { if (!name?.trim()) return <span>{name}</span>; return (<Popover><PopoverTrigger asChild><span className="cursor-pointer font-bold hover:underline text-devotional-saffron transition-colors">{name}</span></PopoverTrigger><PopoverContent className="w-auto p-0 chord-tooltip"><ChordContent chordName={name} instrument={instrument} /></PopoverContent></Popover>); }
 function extractYouTubeVideoId(url: string): string | null { if(!url) return null; const patterns = [/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([a-zA-Z0-9_-]{11})/,]; for (const pattern of patterns) { const match = url.match(pattern); if (match && match[1]) return match[1]; } return null; }
 function InfoPage({ title, children }: { title: string; children: React.ReactNode }) { const navigate = useNavigate(); return (<div className="pb-32"><header className="sticky top-0 bg-background/95 backdrop-blur-sm border-b border-border p-4 zen-shadow"><div className="flex items-center gap-4"><Button variant="ghost" size="sm" onClick={() => navigate(-1)}><ArrowLeft className="h-4 w-4" /></Button><h1 className="text-xl font-medium zen-heading">{title}</h1></div></header><div className="p-4 prose dark:prose-invert max-w-none zen-body">{children}</div></div>); }
-function FilterButton({ label, value, selectedValues, onToggle }: { label: string; value: string; selectedValues: string[]; onToggle: (value: string) => void; }) { const isSelected = selectedValues.includes(value); return (<Button variant={isSelected ? "default" : "outline"} size="sm" onClick={() => onToggle(value)} className="capitalize">{label}</Button>); }
+// ✅ ИЗМЕНЕНИЕ: Компонент кнопки-фильтра теперь работает с одиночным значением
+function FilterButton({ label, value, selectedValue, onSelect }: { label: string; value: string; selectedValue: string | null; onSelect: (value: string) => void; }) {
+    const isSelected = selectedValue === value;
+    return (<Button variant={isSelected ? "default" : "outline"} size="sm" onClick={() => onSelect(value)} className="capitalize">{label}</Button>);
+}
+
 
 // ЭКРАНЫ
 function BhajanListScreen() {
     const [searchQuery, setSearchQuery] = useState("");
     const [showFilters, setShowFilters] = useState(false);
-    const [selectedAuthors, setSelectedAuthors] = useState<string[]>([]);
-    const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
-    const [selectedRagas, setSelectedRagas] = useState<string[]>([]);
+    
+    // ✅ ИЗМЕНЕНИЕ: Состояние для фильтров теперь хранит одно значение (string) или null
+    const [selectedAuthor, setSelectedAuthor] = useState<string | null>(null);
+    const [selectedType, setSelectedType] = useState<string | null>(null);
+    const [selectedRaga, setSelectedRaga] = useState<string | null>(null);
 
     useEffect(() => {
         fetchAndCacheDictionary();
     }, []);
 
-    const toggleFilter = (value: string, selected: string[], setSelected: React.Dispatch<React.SetStateAction<string[]>>) => {
-        setSelected(prev => prev.includes(value) ? prev.filter(item => item !== value) : [...prev, value]);
+    // ✅ ИЗМЕНЕНИЕ: Новый обработчик для установки/снятия фильтра
+    const handleFilterSelect = (setter: React.Dispatch<React.SetStateAction<string | null>>, value: string) => {
+        setter(prev => (prev === value ? null : value));
     };
 
+    // ✅ ИЗМЕНЕНИЕ: useQuery теперь передает одиночные параметры в API
     const { data: bhajans, isLoading, isError, isSuccess } = useQuery({
-      queryKey: ["bhajans", searchQuery, selectedAuthors, selectedTypes, selectedRagas], 
-      queryFn: () => apiClient.listBhajans({ search: searchQuery, authors: selectedAuthors, types: selectedTypes, ragas: selectedRagas }),
+      queryKey: ["bhajans", searchQuery, selectedAuthor, selectedType, selectedRaga], 
+      queryFn: () => apiClient.listBhajans({ 
+        search: searchQuery, 
+        author: selectedAuthor ?? undefined, 
+        type: selectedType ?? undefined, 
+        raga: selectedRaga ?? undefined 
+      }),
       retry: 1,
     });
   
@@ -76,13 +90,15 @@ function BhajanListScreen() {
     
     const { data: cachedBhajansData } = useQuery({ queryKey: ["cachedBhajans"], queryFn: getCachedBhajans, enabled: isError });
     const displayData = isError ? cachedBhajansData?.data : bhajans;
-    const areFiltersActive = selectedAuthors.length > 0 || selectedTypes.length > 0 || selectedRagas.length > 0;
-    const resetFilters = () => { setSelectedAuthors([]); setSelectedTypes([]); setSelectedRagas([]); };
+
+    // ✅ ИЗМЕНЕНИЕ: Логика проверки активных фильтров и их сброса
+    const areFiltersActive = selectedAuthor || selectedType || selectedRaga;
+    const resetFilters = () => { setSelectedAuthor(null); setSelectedType(null); setSelectedRaga(null); };
 
     return (
       <div className="pb-32">
         <header className="sticky top-0 bg-background/95 backdrop-blur-sm border-b border-border p-4 zen-shadow z-20">
-          <h1 className="text-2xl font-light zen-heading text-center mb-4">BhajanApp</h1>
+          <h1 className="text-2xl font-light zen-heading text-center mb-4">Бхаджан Сангам</h1>
           {isError && (<div className="flex items-center justify-center gap-2 text-sm text-destructive mb-2 p-2 bg-destructive/10 rounded-md"><WifiOff className="h-4 w-4" /><span>Офлайн-режим. Данные могут быть устаревшими.</span></div>)}
           <div className="flex gap-2 mb-4">
             <div className="relative flex-grow">
@@ -96,9 +112,10 @@ function BhajanListScreen() {
           {showFilters && (
             <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
                 <div className="space-y-4 pt-4">
-                    <div><Label className="text-sm font-medium mb-2 block">Автор</Label><div className="flex gap-2 flex-wrap"><FilterButton label="Бхактивинод Тхакур" value="Bhaktivinod Thakur" selectedValues={selectedAuthors} onToggle={(v) => toggleFilter(v, selectedAuthors, setSelectedAuthors)} /><FilterButton label="Нароттам Дас Тхакур" value="Narottam Das Thakur" selectedValues={selectedAuthors} onToggle={(v) => toggleFilter(v, selectedAuthors, setSelectedAuthors)} /></div></div>
-                    <div><Label className="text-sm font-medium mb-2 block">Тип</Label><div className="flex gap-2"><FilterButton label="Бхаджан" value="bhajan" selectedValues={selectedTypes} onToggle={(v) => toggleFilter(v, selectedTypes, setSelectedTypes)} /><FilterButton label="Киртан" value="kirtan" selectedValues={selectedTypes} onToggle={(v) => toggleFilter(v, selectedTypes, setSelectedTypes)} /></div></div>
-                    <div><Label className="text-sm font-medium mb-2 block">Рага</Label><div className="flex gap-2"><FilterButton label="Утренняя" value="morning" selectedValues={selectedRagas} onToggle={(v) => toggleFilter(v, selectedRagas, setSelectedRagas)} /><FilterButton label="Дневная" value="afternoon" selectedValues={selectedRagas} onToggle={(v) => toggleFilter(v, selectedRagas, setSelectedRagas)} /><FilterButton label="Вечерняя" value="evening" selectedValues={selectedRagas} onToggle={(v) => toggleFilter(v, selectedRagas, setSelectedRagas)} /></div></div>
+                    {/* ✅ ИЗМЕНЕНИЕ: Компоненты FilterButton используют новую логику */}
+                    <div><Label className="text-sm font-medium mb-2 block">Автор</Label><div className="flex gap-2 flex-wrap"><FilterButton label="Бхактивинод Тхакур" value="Bhaktivinod Thakur" selectedValue={selectedAuthor} onSelect={(v) => handleFilterSelect(setSelectedAuthor, v)} /><FilterButton label="Нароттам Дас Тхакур" value="Narottam Das Thakur" selectedValue={selectedAuthor} onSelect={(v) => handleFilterSelect(setSelectedAuthor, v)} /></div></div>
+                    <div><Label className="text-sm font-medium mb-2 block">Тип</Label><div className="flex gap-2"><FilterButton label="Бхаджан" value="bhajan" selectedValue={selectedType} onSelect={(v) => handleFilterSelect(setSelectedType, v)} /><FilterButton label="Киртан" value="kirtan" selectedValue={selectedType} onSelect={(v) => handleFilterSelect(setSelectedType, v)} /></div></div>
+                    <div><Label className="text-sm font-medium mb-2 block">Рага</Label><div className="flex gap-2"><FilterButton label="Утренняя" value="morning" selectedValue={selectedRaga} onSelect={(v) => handleFilterSelect(setSelectedRaga, v)} /><FilterButton label="Дневная" value="afternoon" selectedValue={selectedRaga} onSelect={(v) => handleFilterSelect(setSelectedRaga, v)} /><FilterButton label="Вечерняя" value="evening" selectedValue={selectedRaga} onSelect={(v) => handleFilterSelect(setSelectedRaga, v)} /></div></div>
                 </div>
             </motion.div>
           )}
@@ -115,77 +132,13 @@ function BhajanListScreen() {
     );
 }
 
+// Остальные экраны (BhajanDetailScreen, LessonsScreen и т.д.) остаются без изменений
 function BhajanDetailScreen() { const navigate = useNavigate(); const { id } = useParams<{ id: string }>(); const [selectedInstrument, setSelectedInstrument] = useState("guitar"); const [activeTab, setActiveTab] = useState("lyrics"); const audio = useAudio(); const { data: bhajan } = useQuery(["bhajan", id], () => apiClient.getBhajanDetail({ id: id! }), { enabled: !!id }); const { toggleFavorite, isFavorite } = useFavorites(); if (!bhajan) return <div className="flex items-center justify-center h-screen"><Music className="h-12 w-12 text-muted-foreground mx-auto mb-4" /><p>Загрузка...</p></div>; const playAudio = async (url: string, type: 'snippet' | 'analysis') => { await audio.play({ id: `${bhajan.id}-${type}`, title: `${bhajan.title} (${type})`, author: bhajan.author, audioUrl: url }); }; return (<div className="pb-32"><header className="sticky top-0 bg-background/95 backdrop-blur-sm border-b border-border p-4 zen-shadow"><div className="flex items-center gap-4 mb-4"><Button variant="ghost" size="sm" onClick={() => navigate(-1)}><ArrowLeft className="h-4 w-4" /></Button><div className="flex-1"><h1 className="text-xl font-medium zen-heading">{bhajan.title}</h1><p className="text-sm text-muted-foreground">{bhajan.author}</p></div><Button variant="ghost" size="sm" onClick={() => toggleFavorite(bhajan.id)}><Heart className={`h-5 w-5 ${isFavorite(bhajan.id) ? "fill-current text-red-500" : ""}`} /></Button></div><div className="flex gap-2 mb-4 flex-wrap">{bhajan.hasAudio && bhajan.snippetUrl && <Button variant="outline" size="sm" onClick={() => playAudio(bhajan.snippetUrl!, 'snippet')}><Music4 className="h-4 w-4 mr-2" />Слушать фрагмент</Button>}{bhajan.hasAnalyses && bhajan.analysisUrl && <Button variant="outline" size="sm" onClick={() => playAudio(bhajan.analysisUrl!, 'analysis')}><BookOpen className="h-4 w-4 mr-2" />Слушать разбор</Button>}{bhajan.hasLessons && <Button variant="outline" size="sm" onClick={() => navigate(`/bhajan/${bhajan.id}/lessons`)}><BookOpen className="h-4 w-4 mr-2" />Смотреть уроки</Button>}</div><Select value={selectedInstrument} onValueChange={setSelectedInstrument}><SelectTrigger className="w-full"><SelectValue placeholder="Выберите инструмент" /></SelectTrigger><SelectContent><SelectItem value="guitar">Гитара</SelectItem><SelectItem value="ukulele">Укулеле</SelectItem><SelectItem value="harmonium">Пианино/Гармоника</SelectItem></SelectContent></Select></header><div className="p-4"><Tabs value={activeTab} onValueChange={setActiveTab}><TabsList className="grid w-full grid-cols-2"><TabsTrigger value="lyrics">Текст</TabsTrigger><TabsTrigger value="translation">Перевод</TabsTrigger></TabsList><TabsContent value="lyrics" className="mt-6"><div className="space-y-4">{bhajan.lyricsWithChords.map((section, index) => (<div key={index} className="space-y-2">{section.chords && <div className="text-sm font-mono text-primary flex flex-wrap gap-x-4 gap-y-2">{section.chords.split(/\s+/).map((chord, i) => chord ? <Chord key={i} name={chord} instrument={selectedInstrument} /> : null)}</div>}<div className="zen-body whitespace-pre-line leading-relaxed">{section.lyrics.split(' ').map((word, wordIndex) => (<React.Fragment key={wordIndex}><Word>{word}</Word>{' '}</React.Fragment>))}</div></div>))}</div></TabsContent><TabsContent value="translation" className="mt-6"><div className="zen-body whitespace-pre-line">{bhajan.translation}</div></TabsContent></Tabs></div></div>); }
-
-function LessonsScreen() {
-    const navigate = useNavigate();
-    const { id } = useParams<{ id: string }>();
-    const { data: bhajan } = useQuery(["bhajan", id], () => apiClient.getBhajanDetail({ id: id! }), { enabled: !!id });
-    if (!bhajan) return <div>Загрузка...</div>;
-    if (!bhajan.lessonsUrl) return <div className="p-4">Уроки недоступны. <Button onClick={() => navigate(-1)}>Назад</Button></div>;
-    const videoId = extractYouTubeVideoId(bhajan.lessonsUrl);
-    return (
-        <div className="pb-32">
-            <header className="sticky top-0 bg-background/95 backdrop-blur-sm border-b border-border p-4 zen-shadow">
-                <div className="flex items-center gap-4">
-                    <Button variant="ghost" size="sm" onClick={() => navigate(-1)}><ArrowLeft className="h-4 w-4" /></Button>
-                    <div className="flex-1">
-                        <h1 className="text-xl font-medium zen-heading">Уроки</h1>
-                        <p className="text-sm text-muted-foreground">{bhajan.title}</p>
-                    </div>
-                </div>
-            </header>
-            <div className="p-4">
-                {videoId ? (
-                    <div className="space-y-4">
-                        <div className="aspect-video w-full bg-muted rounded-lg overflow-hidden">
-                            <iframe 
-                                src={`https://www.youtube.com/embed/${videoId}`} 
-                                title={`${bhajan.title} - Уроки`} 
-                                className="w-full h-full border-0" 
-                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" 
-                                allowFullScreen 
-                            />
-                        </div>
-                    </div>
-                ) : (
-                    <div className="text-center py-12">
-                        <p>Доступен видеоурок.</p>
-                        <Button asChild><a href={bhajan.lessonsUrl} target="_blank" rel="noopener noreferrer">Открыть урок</a></Button>
-                    </div>
-                )}
-            </div>
-        </div>
-    );
-}
-
-function FavoritesScreen() {
-    const { favoriteIds } = useFavorites();
-    const { data: allBhajans = [], isLoading } = useQuery({ queryKey: ["bhajans", ""], queryFn: () => apiClient.listBhajans({}) });
-    const favoriteBhajans = allBhajans.filter(bhajan => favoriteIds.includes(bhajan.id));
-    return (
-        <div className="pb-32">
-            <header className="sticky top-0 bg-background/95 backdrop-blur-sm border-b border-border p-4 zen-shadow">
-                <h1 className="text-2xl font-light zen-heading text-center">Избранное</h1>
-            </header>
-            <div className="p-4 space-y-3">
-                {isLoading && <div>Загрузка...</div>}
-                {!isLoading && favoriteBhajans.length === 0 && (
-                    <div className="text-center py-12">
-                        <Heart className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                        <p>В избранном пока ничего нет.</p>
-                    </div>
-                )}
-                <AnimatePresence>
-                    {favoriteBhajans.map((bhajan) => (<BhajanCard key={bhajan.id} bhajan={bhajan} />))}
-                </AnimatePresence>
-            </div>
-        </div>
-    );
-}
+function LessonsScreen() { const navigate = useNavigate(); const { id } = useParams<{ id: string }>(); const { data: bhajan } = useQuery(["bhajan", id], () => apiClient.getBhajanDetail({ id: id! }), { enabled: !!id }); if (!bhajan) return <div>Загрузка...</div>; if (!bhajan.lessonsUrl) return <div className="p-4">Уроки недоступны. <Button onClick={() => navigate(-1)}>Назад</Button></div>; const videoId = extractYouTubeVideoId(bhajan.lessonsUrl); return ( <div className="pb-32"> <header className="sticky top-0 bg-background/95 backdrop-blur-sm border-b border-border p-4 zen-shadow"> <div className="flex items-center gap-4"> <Button variant="ghost" size="sm" onClick={() => navigate(-1)}><ArrowLeft className="h-4 w-4" /></Button> <div className="flex-1"> <h1 className="text-xl font-medium zen-heading">Уроки</h1> <p className="text-sm text-muted-foreground">{bhajan.title}</p> </div> </div> </header> <div className="p-4"> {videoId ? ( <div className="space-y-4"> <div className="aspect-video w-full bg-muted rounded-lg overflow-hidden"> <iframe src={`https://www.youtube.com/embed/${videoId}`} title={`${bhajan.title} - Уроки`} className="w-full h-full border-0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowFullScreen /> </div> </div> ) : ( <div className="text-center py-12"> <p>Доступен видеоурок.</p> <Button asChild><a href={bhajan.lessonsUrl} target="_blank" rel="noopener noreferrer">Открыть урок</a></Button> </div> )} </div> </div> ); }
+function FavoritesScreen() { const { favoriteIds } = useFavorites(); const { data: allBhajans = [], isLoading } = useQuery({ queryKey: ["bhajans", ""], queryFn: () => apiClient.listBhajans({}) }); const favoriteBhajans = allBhajans.filter(bhajan => favoriteIds.includes(bhajan.id)); return ( <div className="pb-32"> <header className="sticky top-0 bg-background/95 backdrop-blur-sm border-b border-border p-4 zen-shadow"> <h1 className="text-2xl font-light zen-heading text-center">Избранное</h1> </header> <div className="p-4 space-y-3"> {isLoading && <div>Загрузка...</div>} {!isLoading && favoriteBhajans.length === 0 && ( <div className="text-center py-12"> <Heart className="h-12 w-12 text-muted-foreground mx-auto mb-4" /> <p>В избранном пока ничего нет.</p> </div> )} <AnimatePresence> {favoriteBhajans.map((bhajan) => (<BhajanCard key={bhajan.id} bhajan={bhajan} />))} </AnimatePresence> </div> </div> ); }
 function SettingsScreen() { const navigate = useNavigate(); return (<div className="pb-32"><header className="sticky top-0 bg-background/95 backdrop-blur-sm border-b border-border p-4 zen-shadow"><h1 className="text-2xl font-light zen-heading text-center">Настройки</h1></header><div className="p-4 space-y-6"><Card><CardHeader><CardTitle className="flex items-center gap-2"><Info className="h-5 w-5" />Информация</CardTitle></CardHeader><CardContent className="space-y-1"><Button variant="ghost" className="w-full justify-start" onClick={() => navigate("/about")}>О нас</Button><Button variant="ghost" className="w-full justify-start" onClick={() => navigate("/projects")}>Наши проекты</Button><Button variant="ghost" className="w-full justify-start" onClick={() => navigate("/contact")}>Контакты</Button></CardContent></Card><Card><CardHeader><CardTitle>Поддержка и участие</CardTitle></CardHeader><CardContent className="space-y-3"><Button variant="outline" className="w-full" onClick={() => navigate("/donate")}><DollarSign className="h-4 w-4 mr-2" />Пожертвовать</Button><Button variant="outline" className="w-full" asChild><a href="https://forms.gle/S4bTDSuyRTBpPy7X8" target="_blank" rel="noopener noreferrer"><Plus className="h-4 w-4 mr-2" />Добавить бхаджан</a></Button></CardContent></Card></div></div>); }
 
-// ГЛАВНЫЙ КОМПОНЕНТ С МАРШРУТАМИ
+// ГЛАВНЫЙ КОМПОНЕНТ С МАРШРУТАМИ (без изменений)
 function BhajanSangamApp() {
   return (
     <Router>
