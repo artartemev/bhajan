@@ -45,10 +45,10 @@ async function testChordDiagramWithPunctuation() {
 async function testMissingAudioHandling() {
   // Test that listBhajans returns bhajans with null audio URLs
   const bhajans = await listBhajans({ search: "", tags: [] });
-  
+
   // Verify that the function handles missing audio gracefully
   expect(Array.isArray(bhajans)).toBe(true);
-  
+
   if (bhajans.length > 0) {
     const firstBhajan = bhajans[0];
     expect(firstBhajan).toHaveProperty('id');
@@ -57,7 +57,7 @@ async function testMissingAudioHandling() {
     expect(firstBhajan).toHaveProperty('snippetUrl');
     expect(firstBhajan).toHaveProperty('tags');
     expect(firstBhajan).toHaveProperty('isFavorite');
-    
+
     // Most bhajans should have null snippetUrl based on external API
     expect(firstBhajan.snippetUrl).toBe(null);
   }

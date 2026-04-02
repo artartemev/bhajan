@@ -1,6 +1,6 @@
 // File: pages/index.tsx (финальная рабочая версия с русским интерфейсом)
 
-import React, { useState, useRef, useEffect, createContext, useContext } from "react";
+import React, { useState, useRef, useEffect, createContext, useContext, useCallback, useMemo } from "react";
 import dynamic from 'next/dynamic';
 import { BrowserRouter as Router, Routes, Route, Link, useNavigate, useLocation, useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -16,14 +16,48 @@ type Bhajan = inferRPCOutputType<"listBhajans">[0];
 const AudioContext = createContext<any>(null);
 
 // ХУКИ И ПРОВАЙДЕРЫ
-const useFavorites = () => {
+const FavoritesContext = createContext<any>(null);
+
+export function FavoritesProvider({ children }: { children: React.ReactNode }) {
     const [favoriteIds, setFavoriteIds] = useState<string[]>([]);
     const queryClient = useQueryClient();
-    useEffect(() => { const storedFavorites = localStorage.getItem('bhajanFavorites'); if (storedFavorites) { setFavoriteIds(JSON.parse(storedFavorites)); } }, []);
-    const toggleFavorite = (bhajanId: string) => { const newFavoriteIds = favoriteIds.includes(bhajanId) ? favoriteIds.filter(id => id !== bhajanId) : [...favoriteIds, bhajanId]; setFavoriteIds(newFavoriteIds); localStorage.setItem('bhajanFavorites', JSON.stringify(newFavoriteIds)); queryClient.invalidateQueries(); };
-    const isFavorite = (bhajanId: string) => favoriteIds.includes(bhajanId);
-    return { favoriteIds, toggleFavorite, isFavorite };
-};
+
+    useEffect(() => {
+        const storedFavorites = localStorage.getItem('bhajanFavorites');
+        if (storedFavorites) {
+            setFavoriteIds(JSON.parse(storedFavorites));
+        }
+    }, []);
+
+    const toggleFavorite = useCallback((bhajanId: string) => {
+        setFavoriteIds(currentIds => {
+            const newFavoriteIds = currentIds.includes(bhajanId)
+                ? currentIds.filter(id => id !== bhajanId)
+                : [...currentIds, bhajanId];
+            localStorage.setItem('bhajanFavorites', JSON.stringify(newFavoriteIds));
+            queryClient.invalidateQueries();
+            return newFavoriteIds;
+        });
+    }, [queryClient]);
+
+    const isFavorite = useCallback((bhajanId: string) => {
+        return favoriteIds.includes(bhajanId);
+    }, [favoriteIds]);
+
+    const value = useMemo(() => ({
+        favoriteIds,
+        toggleFavorite,
+        isFavorite
+    }), [favoriteIds, toggleFavorite, isFavorite]);
+
+    return (
+        <FavoritesContext.Provider value={value}>
+            {children}
+        </FavoritesContext.Provider>
+    );
+}
+
+const useFavorites = () => useContext(FavoritesContext);
 
 export function AudioProvider({ children }: { children: React.ReactNode }) {
     const audioRef = useRef<HTMLAudioElement>(null);
@@ -63,7 +97,7 @@ function BhajanListScreen() {
     }, []);
 
     const toggleFilter = (value: string, selected: string[], setSelected: React.Dispatch<React.SetStateAction<string[]>>) => {
-        setSelected(prev => prev.includes(value) ? prev.filter(item => item !== value) : [...prev, value]);
+        setSelected(prev => prev.includes(value) ? [] : [value]);
     };
 
     const { data: bhajans, isLoading, isError, isSuccess } = useQuery({
