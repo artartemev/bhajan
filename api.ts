@@ -18,21 +18,16 @@ const getBaseUrl = () => {
 async function fetchViaProxy(query: string, variables?: Record<string, any>) {
   const baseUrl = getBaseUrl();
   const proxyUrl = `${baseUrl}/api/bhajan-proxy`;
-  
-  try {
-    const response = await fetch(proxyUrl, { // ✅ Используем полный URL
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query, variables }),
-    });
-    if (!response.ok) throw new Error(`Proxy request failed with status ${response.status}`);
-    const json = await response.json();
-    if (json.errors) throw new Error(`GraphQL Error: ${JSON.stringify(json.errors)}`);
-    return json.data;
-  } catch (error) {
-    console.error(`Failed to fetch via proxy at ${proxyUrl}:`, error);
-    return { listBhajans: [], getBhajan: null };
-  }
+
+  const response = await fetch(proxyUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ query, variables }),
+  });
+  if (!response.ok) throw new Error(`Proxy request failed with status ${response.status}`);
+  const json = await response.json();
+  if (json.errors) throw new Error(`GraphQL Error: ${JSON.stringify(json.errors)}`);
+  return json.data;
 }
 
 // ... (остальной код файла остается без изменений) ...
