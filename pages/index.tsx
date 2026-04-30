@@ -134,10 +134,9 @@ function BhajanCard({ bhajan }: { bhajan: Bhajan }) {
   const handleShare = (e: React.MouseEvent) => { e.stopPropagation(); share(bhajan); };
 
   return (
-    <>
+    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="bhajan-card p-4 cursor-pointer" onClick={() => navigate(`/bhajan/${bhajan.id}`)}>
       <CopyToast visible={copiedId === bhajan.id} />
-      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="bhajan-card p-4 cursor-pointer" onClick={() => navigate(`/bhajan/${bhajan.id}`)}>
-        <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between">
           <div className="flex-1 min-w-0 mr-2">
             <h3 className="font-medium zen-heading truncate">{bhajan.title}</h3>
             <p className="text-sm text-muted-foreground truncate">{bhajan.author}</p>
@@ -152,8 +151,7 @@ function BhajanCard({ bhajan }: { bhajan: Bhajan }) {
             {bhajan.snippetUrl && <Button variant="ghost" size="sm" onClick={handlePlaySnippet}><Play className="h-4 w-4" /></Button>}
           </div>
         </div>
-      </motion.div>
-    </>
+    </motion.div>
   );
 }
 function PianoChordDiagram({ notes, description }: { notes: string; description: string; }) { const keyLayout = [ { name: 'C', color: 'white' }, { name: 'C#', color: 'black' }, { name: 'D', color: 'white' }, { name: 'D#', color: 'black' }, { name: 'E', color: 'white' }, { name: 'F', color: 'white' }, { name: 'F#', color: 'black' }, { name: 'G', color: 'white' }, { name: 'G#', color: 'black' }, { name: 'A', color: 'white' }, { name: 'A#', color: 'black' }, { name: 'B', color: 'white' } ]; const noteToKeyMap: Record<string, string> = { 'Bb': 'A#', 'Eb': 'D#', 'Ab': 'G#', 'Db': 'C#', 'Gb': 'F#', 'Cb': 'B', 'Fb': 'E' }; const pressedNotes = notes.split("-").map(note => noteToKeyMap[note] || note); return (<div className="p-3 bg-card rounded-md border"><p className="text-center font-bold text-sm mb-2">{description}</p><div className="relative flex justify-center h-28 w-[224px] mx-auto">{keyLayout.filter(k => k.color === 'white').map((key) => (<div key={key.name} className={`h-full w-8 border-b border-l border-r border-gray-300 rounded-b-sm relative ${pressedNotes.includes(key.name) ? 'bg-primary/20' : 'bg-white'}`}><span className="absolute bottom-2 left-1/2 -translate-x-1/2 text-xs text-black">{key.name}</span></div>))}<div className="absolute top-0 left-0 h-16 flex items-start" style={{ width: '100%' }}><div className="absolute top-0 h-full w-5 rounded-b-sm z-10" style={{ left: '22px', backgroundColor: pressedNotes.includes('C#') ? 'hsl(var(--primary))' : '#333' }}><span className="absolute bottom-2 left-1/2 -translate-x-1/2 text-xs text-white">C#</span></div><div className="absolute top-0 h-full w-5 rounded-b-sm z-10" style={{ left: '54px', backgroundColor: pressedNotes.includes('D#') ? 'hsl(var(--primary))' : '#333' }}><span className="absolute bottom-2 left-1/2 -translate-x-1/2 text-xs text-white">D#</span></div><div className="absolute top-0 h-full w-5 rounded-b-sm z-10" style={{ left: '118px', backgroundColor: pressedNotes.includes('F#') ? 'hsl(var(--primary))' : '#333' }}><span className="absolute bottom-2 left-1/2 -translate-x-1/2 text-xs text-white">F#</span></div><div className="absolute top-0 h-full w-5 rounded-b-sm z-10" style={{ left: '150px', backgroundColor: pressedNotes.includes('G#') ? 'hsl(var(--primary))' : '#333' }}><span className="absolute bottom-2 left-1/2 -translate-x-1/2 text-xs text-white">G#</span></div><div className="absolute top-0 h-full w-5 rounded-b-sm z-10" style={{ left: '182px', backgroundColor: pressedNotes.includes('A#') ? 'hsl(var(--primary))' : '#333' }}><span className="absolute bottom-2 left-1/2 -translate-x-1/2 text-xs text-white">A#</span></div></div></div></div>); }
