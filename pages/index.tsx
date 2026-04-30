@@ -4,7 +4,7 @@ import React, { useState, useRef, useEffect, createContext, useContext } from "r
 import dynamic from 'next/dynamic';
 import { BrowserRouter as Router, Routes, Route, Link, useNavigate, useLocation, useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Search, Play, Pause, Heart, Settings, Home, SkipBack, SkipForward, Plus, Info, DollarSign, ArrowLeft, BookOpen, Music, Music4, WifiOff, Filter, X, Share2, Check, Copy } from "lucide-react";
+import { Search, Play, Pause, Heart, Settings, Home, SkipBack, SkipForward, Plus, Minus, Info, DollarSign, ArrowLeft, BookOpen, Music, Music4, WifiOff, Filter, X, Share2, Check, Moon, Sun } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 import { apiClient, inferRPCOutputType } from "../client/api";
@@ -36,6 +36,43 @@ function useShareBhajan() {
   };
 
   return { share, copiedId };
+}
+
+// DARK THEME
+function useTheme() {
+  const [isDark, setIsDark] = useState(false);
+
+  useEffect(() => {
+    const stored = localStorage.getItem('theme');
+    const dark = stored === 'dark' || (!stored && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    setIsDark(dark);
+    document.documentElement.classList.toggle('dark', dark);
+  }, []);
+
+  const toggle = () => {
+    const next = !isDark;
+    setIsDark(next);
+    document.documentElement.classList.toggle('dark', next);
+    localStorage.setItem('theme', next ? 'dark' : 'light');
+  };
+
+  return { isDark, toggle };
+}
+
+// CHORD TRANSPOSITION
+const SHARP_NOTES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+const FLAT_TO_SHARP: Record<string, string> = {
+  Db: 'C#', Eb: 'D#', Fb: 'E', Gb: 'F#', Ab: 'G#', Bb: 'A#', Cb: 'B',
+};
+function transposeChord(chord: string, semitones: number): string {
+  if (!semitones) return chord;
+  const match = chord.match(/^([A-G][#b]?)(.*)/);
+  if (!match) return chord;
+  const [, root, suffix] = match;
+  const normalizedRoot = FLAT_TO_SHARP[root] || root;
+  const idx = SHARP_NOTES.indexOf(normalizedRoot);
+  if (idx === -1) return chord;
+  return SHARP_NOTES[((idx + semitones) % 12 + 12) % 12] + suffix;
 }
 
 // TOAST
@@ -197,6 +234,7 @@ function BhajanDetailScreen() {
   const { id } = useParams<{ id: string }>();
   const [selectedInstrument, setSelectedInstrument] = useState("guitar");
   const [activeTab, setActiveTab] = useState("lyrics");
+  const [transpose, setTranspose] = useState(0);
   const audio = useAudio();
   const { data: bhajan } = useQuery(["bhajan", id], () => apiClient.getBhajanDetail({ id: id! }), { enabled: !!id });
   const { toggleFavorite, isFavorite } = useFavorites();
@@ -235,14 +273,24 @@ function BhajanDetailScreen() {
           {bhajan.hasAnalyses && bhajan.analysisUrl && <Button variant="outline" size="sm" onClick={() => playAudio(bhajan.analysisUrl!, 'analysis')}><BookOpen className="h-4 w-4 mr-2" />Слушать разбор</Button>}
           {bhajan.hasLessons && <Button variant="outline" size="sm" onClick={() => navigate(`/bhajan/${bhajan.id}/lessons`)}><BookOpen className="h-4 w-4 mr-2" />Смотреть уроки</Button>}
         </div>
-        <Select value={selectedInstrument} onValueChange={setSelectedInstrument}>
-          <SelectTrigger className="w-full"><SelectValue placeholder="Выберите инструмент" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="guitar">Гитара</SelectItem>
-            <SelectItem value="ukulele">Укулеле</SelectItem>
-            <SelectItem value="harmonium">Пианино/Гармоника</SelectItem>
-          </SelectContent>
-        </Select>
+        <div className="flex gap-2 items-center">
+          <Select value={selectedInstrument} onValueChange={setSelectedInstrument}>
+            <SelectTrigger className="flex-1"><SelectValue placeholder="Выберите инструмент" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="guitar">Гитара</SelectItem>
+              <SelectItem value="ukulele">Укулеле</SelectItem>
+              <SelectItem value="harmonium">Пианино/Гармоника</SelectItem>
+            </SelectContent>
+          </Select>
+          <div className="flex items-center gap-1 shrink-0 border rounded-md px-1">
+            <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => setTranspose(t => t - 1)}><Minus className="h-3 w-3" /></Button>
+            <span className="text-sm w-8 text-center font-mono select-none">{transpose > 0 ? `+${transpose}` : transpose}</span>
+            <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => setTranspose(t => t + 1)}><Plus className="h-3 w-3" /></Button>
+          </div>
+        </div>
+        {transpose !== 0 && (
+          <button onClick={() => setTranspose(0)} className="text-xs text-muted-foreground underline mt-1">сбросить транспозицию</button>
+        )}
       </header>
       <div className="p-4">
         <Tabs value={activeTab} onValueChange={setActiveTab}>
@@ -256,7 +304,7 @@ function BhajanDetailScreen() {
                 <div key={index} className="space-y-2">
                   {section.chords && (
                     <div className="text-sm font-mono text-primary flex flex-wrap gap-x-4 gap-y-2">
-                      {section.chords.split(/\s+/).map((chord, i) => chord ? <Chord key={i} name={chord} instrument={selectedInstrument} /> : null)}
+                      {section.chords.split(/\s+/).map((chord, i) => chord ? <Chord key={i} name={transposeChord(chord, transpose)} instrument={selectedInstrument} /> : null)}
                     </div>
                   )}
                   <div className="zen-body whitespace-pre-line leading-relaxed">
@@ -343,10 +391,62 @@ function FavoritesScreen() {
         </div>
     );
 }
-function SettingsScreen() { const navigate = useNavigate(); return (<div className="pb-32"><header className="sticky top-0 bg-background/95 backdrop-blur-sm border-b border-border p-4 zen-shadow"><h1 className="text-2xl font-light zen-heading text-center">Настройки</h1></header><div className="p-4 space-y-6"><Card><CardHeader><CardTitle className="flex items-center gap-2"><Info className="h-5 w-5" />Информация</CardTitle></CardHeader><CardContent className="space-y-1"><Button variant="ghost" className="w-full justify-start" onClick={() => navigate("/about")}>О нас</Button><Button variant="ghost" className="w-full justify-start" onClick={() => navigate("/projects")}>Наши проекты</Button><Button variant="ghost" className="w-full justify-start" onClick={() => navigate("/contact")}>Контакты</Button></CardContent></Card><Card><CardHeader><CardTitle>Поддержка и участие</CardTitle></CardHeader><CardContent className="space-y-3"><Button variant="outline" className="w-full" onClick={() => navigate("/donate")}><DollarSign className="h-4 w-4 mr-2" />Пожертвовать</Button><Button variant="outline" className="w-full" asChild><a href="https://forms.gle/S4bTDSuyRTBpPy7X8" target="_blank" rel="noopener noreferrer"><Plus className="h-4 w-4 mr-2" />Добавить бхаджан</a></Button></CardContent></Card></div></div>); }
+function SettingsScreen() {
+  const navigate = useNavigate();
+  const { isDark, toggle } = useTheme();
+
+  return (
+    <div className="pb-32">
+      <header className="sticky top-0 bg-background/95 backdrop-blur-sm border-b border-border p-4 zen-shadow">
+        <h1 className="text-2xl font-light zen-heading text-center">Настройки</h1>
+      </header>
+      <div className="p-4 space-y-6">
+        <Card>
+          <CardHeader><CardTitle className="flex items-center gap-2"><Sun className="h-5 w-5" />Оформление</CardTitle></CardHeader>
+          <CardContent>
+            <div className="flex items-center justify-between">
+              <span className="text-sm">Тёмная тема</span>
+              <button
+                onClick={toggle}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${isDark ? 'bg-primary' : 'bg-muted'}`}
+                role="switch"
+                aria-checked={isDark}
+              >
+                <span className={`inline-block h-4 w-4 transform rounded-full bg-background shadow transition-transform ${isDark ? 'translate-x-6' : 'translate-x-1'}`} />
+              </button>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader><CardTitle className="flex items-center gap-2"><Info className="h-5 w-5" />Информация</CardTitle></CardHeader>
+          <CardContent className="space-y-1">
+            <Button variant="ghost" className="w-full justify-start" onClick={() => navigate("/about")}>О нас</Button>
+            <Button variant="ghost" className="w-full justify-start" onClick={() => navigate("/projects")}>Наши проекты</Button>
+            <Button variant="ghost" className="w-full justify-start" onClick={() => navigate("/contact")}>Контакты</Button>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader><CardTitle>Поддержка и участие</CardTitle></CardHeader>
+          <CardContent className="space-y-3">
+            <Button variant="outline" className="w-full" onClick={() => navigate("/donate")}><DollarSign className="h-4 w-4 mr-2" />Пожертвовать</Button>
+            <Button variant="outline" className="w-full" asChild>
+              <a href="https://forms.gle/S4bTDSuyRTBpPy7X8" target="_blank" rel="noopener noreferrer"><Plus className="h-4 w-4 mr-2" />Добавить бхаджан</a>
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+}
 
 // ГЛАВНЫЙ КОМПОНЕНТ С МАРШРУТАМИ
 function BhajanSangamApp() {
+  useEffect(() => {
+    const stored = localStorage.getItem('theme');
+    const dark = stored === 'dark' || (!stored && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    document.documentElement.classList.toggle('dark', dark);
+  }, []);
+
   return (
     <Router>
       <div className="min-h-screen bg-background text-foreground">
