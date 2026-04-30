@@ -1,36 +1,19 @@
-// File: api.ts (финальная версия с исправлением для серверных запросов)
-
 const API_URL = 'https://bhajan.miracall.net/api';
 
 const LIST_BHAJANS_QUERY = `query Query { listBhajans { title author audioPath options } }`;
 const GET_BHAJAN_QUERY = `query GetBhajan($author: String!, $title: String!) { getBhajan(author: $author, title: $title) { author title chords text translation audioPath reviewPath lessons } }`;
 
-// ✅ ИСПРАВЛЕНИЕ: Определяем базовый URL в зависимости от окружения
-const getBaseUrl = () => {
-  // Если код выполняется в браузере, window будет определен.
-  if (typeof window !== 'undefined') {
-    return ''; // В браузере используем относительный путь
-  }
-  // В ином случае (в скрипте Node.js), используем полный путь
-  return 'http://localhost:3000';
-};
-
-async function fetchViaProxy(query: string, variables?: Record<string, any>) {
-  const baseUrl = getBaseUrl();
-  const proxyUrl = `${baseUrl}/api/bhajan-proxy`;
-
-  const response = await fetch(proxyUrl, {
+async function fetchGraphQL(query: string, variables?: Record<string, any>) {
+  const response = await fetch(API_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ query, variables }),
   });
-  if (!response.ok) throw new Error(`Proxy request failed with status ${response.status}`);
+  if (!response.ok) throw new Error(`API request failed with status ${response.status}`);
   const json = await response.json();
   if (json.errors) throw new Error(`GraphQL Error: ${JSON.stringify(json.errors)}`);
   return json.data;
 }
-
-// ... (остальной код файла остается без изменений) ...
 
 type TransformedBhajan = {
   id: string;
@@ -48,7 +31,7 @@ export async function listBhajans(input: {
   types?: string[];
   ragas?: string[];
 }) {
-  const data = await fetchViaProxy(LIST_BHAJANS_QUERY);
+  const data = await fetchGraphQL(LIST_BHAJANS_QUERY);
   let bhajansFromApi = data.listBhajans || [];
 
   let transformedBhajans: TransformedBhajan[] = bhajansFromApi.map((bhajan: any) => ({
@@ -79,7 +62,7 @@ export async function listBhajans(input: {
 export async function getBhajanDetail(input: { id: string }) {
   const decoded = decodeURIComponent(input.id).split('|'); const [title, author] = decoded;
   if (!title || !author) throw new Error("Invalid ID format");
-  const data = await fetchViaProxy(GET_BHAJAN_QUERY, { author, title });
+  const data = await fetchGraphQL(GET_BHAJAN_QUERY, { author, title });
   const foundBhajan = data.getBhajan;
   if (!foundBhajan) throw new Error("Bhajan not found");
   const fullLyrics = foundBhajan.chords ? `${foundBhajan.chords}\n\n${foundBhajan.text}` : foundBhajan.text;
