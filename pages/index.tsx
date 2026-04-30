@@ -4,7 +4,7 @@ import React, { useState, useRef, useEffect, createContext, useContext } from "r
 import dynamic from 'next/dynamic';
 import { BrowserRouter as Router, Routes, Route, Link, useNavigate, useLocation, useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Search, Play, Pause, Heart, Settings, Home, SkipBack, SkipForward, Plus, Info, DollarSign, ArrowLeft, BookOpen, Music, Music4, WifiOff, Filter, X } from "lucide-react";
+import { Search, Play, Pause, Heart, Settings, Home, SkipBack, SkipForward, Plus, Info, DollarSign, ArrowLeft, BookOpen, Music, Music4, WifiOff, Filter, X, Share2, Check, Copy } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 import { apiClient, inferRPCOutputType } from "../client/api";
@@ -14,6 +14,48 @@ import { Word } from "../components/Word";
 
 type Bhajan = inferRPCOutputType<"listBhajans">[0];
 const AudioContext = createContext<any>(null);
+
+// SHARING
+function useShareBhajan() {
+  const [copiedId, setCopiedId] = React.useState<string | null>(null);
+
+  const share = async (bhajan: { id: string; title: string; author: string }) => {
+    const url = `${window.location.origin}/bhajan/${bhajan.id}`;
+    const shareData = { title: bhajan.title, text: `${bhajan.title} — ${bhajan.author}`, url };
+
+    if (navigator.share) {
+      try { await navigator.share(shareData); return; } catch {}
+    }
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopiedId(bhajan.id);
+      setTimeout(() => setCopiedId(null), 2000);
+    } catch {
+      prompt("Скопируйте ссылку:", url);
+    }
+  };
+
+  return { share, copiedId };
+}
+
+// TOAST
+function CopyToast({ visible }: { visible: boolean }) {
+  return (
+    <AnimatePresence>
+      {visible && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: 20 }}
+          className="fixed bottom-36 left-1/2 -translate-x-1/2 z-50 bg-foreground text-background text-sm px-4 py-2 rounded-full flex items-center gap-2 shadow-lg"
+        >
+          <Check className="h-4 w-4" />
+          Ссылка скопирована
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+}
 
 // ХУКИ И ПРОВАЙДЕРЫ
 const useFavorites = () => {
@@ -41,7 +83,42 @@ function formatTime(seconds: number): string { const mins = Math.floor(seconds /
 // КОМПОНЕНТЫ
 function BottomNavigation() { const location = useLocation(); const navItems = [{ path: "/", icon: Home, label: "Бхаджаны" }, { path: "/favorites", icon: Heart, label: "Избранное" }, { path: "/settings", icon: Settings, label: "Настройки" }]; return (<nav className="fixed bottom-0 left-0 right-0 bg-card border-t border-border zen-shadow-lg"><div className="flex justify-around items-center h-16">{navItems.map((item) => { const isActive = location.pathname === item.path; return <Link key={item.path} to={item.path} className={`flex flex-col items-center justify-center flex-1 h-full transition-colors ${isActive ? "text-primary" : "text-muted-foreground hover:text-foreground"}`}><item.icon className="h-5 w-5" /><span className="text-xs mt-1">{item.label}</span></Link>; })}</div></nav>); }
 function AudioPlayerBar() { const audio = useAudio(); if (!audio.currentTrack) return null; return (<div className="fixed bottom-16 left-0 right-0 bg-card border-t border-border zen-shadow-lg p-4"><div className="flex items-center gap-4"><div className="flex-1 min-w-0"><h4 className="font-medium text-sm truncate">{audio.currentTrack.title}</h4><p className="text-xs text-muted-foreground truncate">{audio.currentTrack.author}</p></div><div className="flex items-center gap-2"><Button variant="ghost" size="sm" onClick={() => audio.seek(Math.max(0, audio.currentTime - 15))}><SkipBack className="h-4 w-4" /></Button><Button variant="ghost" size="sm" onClick={audio.isPlaying ? audio.pause : () => audio.play(audio.currentTrack)}>{audio.isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}</Button><Button variant="ghost" size="sm" onClick={() => audio.seek(Math.min(audio.duration, audio.currentTime + 15))}><SkipForward className="h-4 w-4" /></Button></div></div><div className="mt-2"><Slider value={[audio.currentTime]} max={audio.duration || 100} step={1} onValueChange={([value]) => audio.seek(value || 0)} className="w-full" /><div className="flex justify-between text-xs text-muted-foreground mt-1"><span>{formatTime(audio.currentTime)}</span><span>{formatTime(audio.duration)}</span></div></div></div>); }
-function BhajanCard({ bhajan }: { bhajan: Bhajan }) { const navigate = useNavigate(); const audio = useAudio(); const { toggleFavorite, isFavorite } = useFavorites(); const handlePlaySnippet = async (e: React.MouseEvent) => { e.stopPropagation(); if (bhajan.snippetUrl) { await audio.play({ id: bhajan.id, title: bhajan.title, author: bhajan.author, audioUrl: bhajan.snippetUrl }); } }; const handleToggleFavorite = (e: React.MouseEvent) => { e.stopPropagation(); toggleFavorite(bhajan.id); }; return (<motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="bhajan-card p-4 cursor-pointer" onClick={() => navigate(`/bhajan/${bhajan.id}`)}><div className="flex items-center justify-between"><div className="flex-1"><h3 className="font-medium zen-heading">{bhajan.title}</h3><p className="text-sm text-muted-foreground">{bhajan.author}</p></div><div className="flex items-center gap-2"><Button variant="ghost" size="sm" onClick={handleToggleFavorite} className={isFavorite(bhajan.id) ? "text-red-500" : ""}><Heart className={`h-4 w-4 ${isFavorite(bhajan.id) ? "fill-current" : ""}`} /></Button>{bhajan.snippetUrl && <Button variant="ghost" size="sm" onClick={handlePlaySnippet}><Play className="h-4 w-4" /></Button>}</div></div></motion.div>); }
+function BhajanCard({ bhajan }: { bhajan: Bhajan }) {
+  const navigate = useNavigate();
+  const audio = useAudio();
+  const { toggleFavorite, isFavorite } = useFavorites();
+  const { share, copiedId } = useShareBhajan();
+
+  const handlePlaySnippet = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (bhajan.snippetUrl) { await audio.play({ id: bhajan.id, title: bhajan.title, author: bhajan.author, audioUrl: bhajan.snippetUrl }); }
+  };
+  const handleToggleFavorite = (e: React.MouseEvent) => { e.stopPropagation(); toggleFavorite(bhajan.id); };
+  const handleShare = (e: React.MouseEvent) => { e.stopPropagation(); share(bhajan); };
+
+  return (
+    <>
+      <CopyToast visible={copiedId === bhajan.id} />
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="bhajan-card p-4 cursor-pointer" onClick={() => navigate(`/bhajan/${bhajan.id}`)}>
+        <div className="flex items-center justify-between">
+          <div className="flex-1 min-w-0 mr-2">
+            <h3 className="font-medium zen-heading truncate">{bhajan.title}</h3>
+            <p className="text-sm text-muted-foreground truncate">{bhajan.author}</p>
+          </div>
+          <div className="flex items-center gap-1 shrink-0">
+            <Button variant="ghost" size="sm" onClick={handleShare} title="Поделиться">
+              {copiedId === bhajan.id ? <Check className="h-4 w-4 text-green-500" /> : <Share2 className="h-4 w-4" />}
+            </Button>
+            <Button variant="ghost" size="sm" onClick={handleToggleFavorite} className={isFavorite(bhajan.id) ? "text-red-500" : ""}>
+              <Heart className={`h-4 w-4 ${isFavorite(bhajan.id) ? "fill-current" : ""}`} />
+            </Button>
+            {bhajan.snippetUrl && <Button variant="ghost" size="sm" onClick={handlePlaySnippet}><Play className="h-4 w-4" /></Button>}
+          </div>
+        </div>
+      </motion.div>
+    </>
+  );
+}
 function PianoChordDiagram({ notes, description }: { notes: string; description: string; }) { const keyLayout = [ { name: 'C', color: 'white' }, { name: 'C#', color: 'black' }, { name: 'D', color: 'white' }, { name: 'D#', color: 'black' }, { name: 'E', color: 'white' }, { name: 'F', color: 'white' }, { name: 'F#', color: 'black' }, { name: 'G', color: 'white' }, { name: 'G#', color: 'black' }, { name: 'A', color: 'white' }, { name: 'A#', color: 'black' }, { name: 'B', color: 'white' } ]; const noteToKeyMap: Record<string, string> = { 'Bb': 'A#', 'Eb': 'D#', 'Ab': 'G#', 'Db': 'C#', 'Gb': 'F#', 'Cb': 'B', 'Fb': 'E' }; const pressedNotes = notes.split("-").map(note => noteToKeyMap[note] || note); return (<div className="p-3 bg-card rounded-md border"><p className="text-center font-bold text-sm mb-2">{description}</p><div className="relative flex justify-center h-28 w-[224px] mx-auto">{keyLayout.filter(k => k.color === 'white').map((key) => (<div key={key.name} className={`h-full w-8 border-b border-l border-r border-gray-300 rounded-b-sm relative ${pressedNotes.includes(key.name) ? 'bg-primary/20' : 'bg-white'}`}><span className="absolute bottom-2 left-1/2 -translate-x-1/2 text-xs text-black">{key.name}</span></div>))}<div className="absolute top-0 left-0 h-16 flex items-start" style={{ width: '100%' }}><div className="absolute top-0 h-full w-5 rounded-b-sm z-10" style={{ left: '22px', backgroundColor: pressedNotes.includes('C#') ? 'hsl(var(--primary))' : '#333' }}><span className="absolute bottom-2 left-1/2 -translate-x-1/2 text-xs text-white">C#</span></div><div className="absolute top-0 h-full w-5 rounded-b-sm z-10" style={{ left: '54px', backgroundColor: pressedNotes.includes('D#') ? 'hsl(var(--primary))' : '#333' }}><span className="absolute bottom-2 left-1/2 -translate-x-1/2 text-xs text-white">D#</span></div><div className="absolute top-0 h-full w-5 rounded-b-sm z-10" style={{ left: '118px', backgroundColor: pressedNotes.includes('F#') ? 'hsl(var(--primary))' : '#333' }}><span className="absolute bottom-2 left-1/2 -translate-x-1/2 text-xs text-white">F#</span></div><div className="absolute top-0 h-full w-5 rounded-b-sm z-10" style={{ left: '150px', backgroundColor: pressedNotes.includes('G#') ? 'hsl(var(--primary))' : '#333' }}><span className="absolute bottom-2 left-1/2 -translate-x-1/2 text-xs text-white">G#</span></div><div className="absolute top-0 h-full w-5 rounded-b-sm z-10" style={{ left: '182px', backgroundColor: pressedNotes.includes('A#') ? 'hsl(var(--primary))' : '#333' }}><span className="absolute bottom-2 left-1/2 -translate-x-1/2 text-xs text-white">A#</span></div></div></div></div>); }
 function ChordDiagramDisplay({ chordData }: { chordData: { frets?: string; notes?: string; description: string; instrument: string; }; }) { const { frets, notes, description, instrument } = chordData; if ((instrument === "harmonium" || instrument === "piano") && notes) { return <PianoChordDiagram notes={notes} description={description} />; } if (!frets) return null; const numStrings = instrument === "ukulele" ? 4 : 6; const numFrets = 5; const width = instrument === "ukulele" ? 80 : 100; const height = 120; const paddingTop = 20; const paddingLeft = 10; const stringSpacing = (width - paddingLeft * 2) / (numStrings - 1); const fretSpacing = (height - paddingTop) / numFrets; return (<div className="p-2 bg-card rounded-md border"><p className="text-center font-bold text-sm mb-1">{description}</p><p className="text-center text-xs text-muted-foreground mb-2 capitalize">{instrument}</p><svg width={width} height={height} viewBox={`0 0 ${width} ${height}`}>{ [...Array(numFrets + 1)].map((_, i) => (<line key={i} x1={paddingLeft} y1={paddingTop + i * fretSpacing} x2={width - paddingLeft} y2={paddingTop + i * fretSpacing} stroke="currentColor" strokeWidth={i === 0 ? "2" : "0.5"} />))}{[...Array(numStrings)].map((_, i) => (<line key={i} x1={paddingLeft + i * stringSpacing} y1={paddingTop} x2={paddingLeft + i * stringSpacing} y2={height} stroke="currentColor" strokeWidth="0.5" />))}{frets.split("").map((fret, stringIndex) => { const fretNum = fret === "x" || fret === "X" ? -1 : parseInt(fret, 10); if (fretNum > 0) { return (<circle key={stringIndex} cx={paddingLeft + stringIndex * stringSpacing} cy={paddingTop + (fretNum - 0.5) * fretSpacing} r={stringSpacing / 3.5} fill="currentColor" />); } return null; })}{frets.split("").map((fret, stringIndex) => { if (fret === "x" || fret === "X") { return (<text key={stringIndex} x={paddingLeft + stringIndex * stringSpacing} y={paddingTop - 5} textAnchor="middle" fontSize="10" fill="currentColor">×</text>); } if (fret === "0") { return (<circle key={stringIndex} cx={paddingLeft + stringIndex * stringSpacing} cy={paddingTop - 8} r={3} stroke="currentColor" fill="none" strokeWidth="1" />); } return null; })}</svg></div>); }
 function ChordContent({ chordName, instrument }: { chordName: string; instrument: string; }) { const { data, isLoading, error } = useQuery(["chord", chordName, instrument], () => apiClient.getChordDiagram({ chord: chordName, instrument }), { staleTime: Infinity, retry: false }); if (isLoading) return <div className="p-4 text-center">Загрузка...</div>; if (error || !data?.found) { return (<div className="p-4 text-center text-sm text-muted-foreground">Схема аккорда недоступна</div>); } return <ChordDiagramDisplay chordData={{ frets: data.frets, notes: data.notes, description: data.description || "Неизвестный аккорд", instrument: data.instrument || instrument }} />; }
@@ -115,7 +192,90 @@ function BhajanListScreen() {
     );
 }
 
-function BhajanDetailScreen() { const navigate = useNavigate(); const { id } = useParams<{ id: string }>(); const [selectedInstrument, setSelectedInstrument] = useState("guitar"); const [activeTab, setActiveTab] = useState("lyrics"); const audio = useAudio(); const { data: bhajan } = useQuery(["bhajan", id], () => apiClient.getBhajanDetail({ id: id! }), { enabled: !!id }); const { toggleFavorite, isFavorite } = useFavorites(); if (!bhajan) return <div className="flex items-center justify-center h-screen"><Music className="h-12 w-12 text-muted-foreground mx-auto mb-4" /><p>Загрузка...</p></div>; const playAudio = async (url: string, type: 'snippet' | 'analysis') => { await audio.play({ id: `${bhajan.id}-${type}`, title: `${bhajan.title} (${type})`, author: bhajan.author, audioUrl: url }); }; return (<div className="pb-32"><header className="sticky top-0 bg-background/95 backdrop-blur-sm border-b border-border p-4 zen-shadow"><div className="flex items-center gap-4 mb-4"><Button variant="ghost" size="sm" onClick={() => navigate(-1)}><ArrowLeft className="h-4 w-4" /></Button><div className="flex-1"><h1 className="text-xl font-medium zen-heading">{bhajan.title}</h1><p className="text-sm text-muted-foreground">{bhajan.author}</p></div><Button variant="ghost" size="sm" onClick={() => toggleFavorite(bhajan.id)}><Heart className={`h-5 w-5 ${isFavorite(bhajan.id) ? "fill-current text-red-500" : ""}`} /></Button></div><div className="flex gap-2 mb-4 flex-wrap">{bhajan.hasAudio && bhajan.snippetUrl && <Button variant="outline" size="sm" onClick={() => playAudio(bhajan.snippetUrl!, 'snippet')}><Music4 className="h-4 w-4 mr-2" />Слушать фрагмент</Button>}{bhajan.hasAnalyses && bhajan.analysisUrl && <Button variant="outline" size="sm" onClick={() => playAudio(bhajan.analysisUrl!, 'analysis')}><BookOpen className="h-4 w-4 mr-2" />Слушать разбор</Button>}{bhajan.hasLessons && <Button variant="outline" size="sm" onClick={() => navigate(`/bhajan/${bhajan.id}/lessons`)}><BookOpen className="h-4 w-4 mr-2" />Смотреть уроки</Button>}</div><Select value={selectedInstrument} onValueChange={setSelectedInstrument}><SelectTrigger className="w-full"><SelectValue placeholder="Выберите инструмент" /></SelectTrigger><SelectContent><SelectItem value="guitar">Гитара</SelectItem><SelectItem value="ukulele">Укулеле</SelectItem><SelectItem value="harmonium">Пианино/Гармоника</SelectItem></SelectContent></Select></header><div className="p-4"><Tabs value={activeTab} onValueChange={setActiveTab}><TabsList className="grid w-full grid-cols-2"><TabsTrigger value="lyrics">Текст</TabsTrigger><TabsTrigger value="translation">Перевод</TabsTrigger></TabsList><TabsContent value="lyrics" className="mt-6"><div className="space-y-4">{bhajan.lyricsWithChords.map((section, index) => (<div key={index} className="space-y-2">{section.chords && <div className="text-sm font-mono text-primary flex flex-wrap gap-x-4 gap-y-2">{section.chords.split(/\s+/).map((chord, i) => chord ? <Chord key={i} name={chord} instrument={selectedInstrument} /> : null)}</div>}<div className="zen-body whitespace-pre-line leading-relaxed">{section.lyrics.split(' ').map((word, wordIndex) => (<React.Fragment key={wordIndex}><Word>{word}</Word>{' '}</React.Fragment>))}</div></div>))}</div></TabsContent><TabsContent value="translation" className="mt-6"><div className="zen-body whitespace-pre-line">{bhajan.translation}</div></TabsContent></Tabs></div></div>); }
+function BhajanDetailScreen() {
+  const navigate = useNavigate();
+  const { id } = useParams<{ id: string }>();
+  const [selectedInstrument, setSelectedInstrument] = useState("guitar");
+  const [activeTab, setActiveTab] = useState("lyrics");
+  const audio = useAudio();
+  const { data: bhajan } = useQuery(["bhajan", id], () => apiClient.getBhajanDetail({ id: id! }), { enabled: !!id });
+  const { toggleFavorite, isFavorite } = useFavorites();
+  const { share, copiedId } = useShareBhajan();
+
+  if (!bhajan) return (
+    <div className="flex flex-col items-center justify-center h-screen gap-4">
+      <Music className="h-12 w-12 text-muted-foreground" />
+      <p className="text-muted-foreground">Загрузка...</p>
+    </div>
+  );
+
+  const playAudio = async (url: string, type: 'snippet' | 'analysis') => {
+    await audio.play({ id: `${bhajan.id}-${type}`, title: `${bhajan.title} (${type})`, author: bhajan.author, audioUrl: url });
+  };
+
+  return (
+    <div className="pb-32">
+      <CopyToast visible={copiedId === bhajan.id} />
+      <header className="sticky top-0 bg-background/95 backdrop-blur-sm border-b border-border p-4 zen-shadow">
+        <div className="flex items-center gap-2 mb-4">
+          <Button variant="ghost" size="sm" onClick={() => navigate(-1)}><ArrowLeft className="h-4 w-4" /></Button>
+          <div className="flex-1 min-w-0">
+            <h1 className="text-xl font-medium zen-heading truncate">{bhajan.title}</h1>
+            <p className="text-sm text-muted-foreground truncate">{bhajan.author}</p>
+          </div>
+          <Button variant="ghost" size="sm" onClick={() => share(bhajan)} title="Поделиться ссылкой">
+            {copiedId === bhajan.id ? <Check className="h-5 w-5 text-green-500" /> : <Share2 className="h-5 w-5" />}
+          </Button>
+          <Button variant="ghost" size="sm" onClick={() => toggleFavorite(bhajan.id)}>
+            <Heart className={`h-5 w-5 ${isFavorite(bhajan.id) ? "fill-current text-red-500" : ""}`} />
+          </Button>
+        </div>
+        <div className="flex gap-2 mb-4 flex-wrap">
+          {bhajan.hasAudio && bhajan.snippetUrl && <Button variant="outline" size="sm" onClick={() => playAudio(bhajan.snippetUrl!, 'snippet')}><Music4 className="h-4 w-4 mr-2" />Слушать фрагмент</Button>}
+          {bhajan.hasAnalyses && bhajan.analysisUrl && <Button variant="outline" size="sm" onClick={() => playAudio(bhajan.analysisUrl!, 'analysis')}><BookOpen className="h-4 w-4 mr-2" />Слушать разбор</Button>}
+          {bhajan.hasLessons && <Button variant="outline" size="sm" onClick={() => navigate(`/bhajan/${bhajan.id}/lessons`)}><BookOpen className="h-4 w-4 mr-2" />Смотреть уроки</Button>}
+        </div>
+        <Select value={selectedInstrument} onValueChange={setSelectedInstrument}>
+          <SelectTrigger className="w-full"><SelectValue placeholder="Выберите инструмент" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="guitar">Гитара</SelectItem>
+            <SelectItem value="ukulele">Укулеле</SelectItem>
+            <SelectItem value="harmonium">Пианино/Гармоника</SelectItem>
+          </SelectContent>
+        </Select>
+      </header>
+      <div className="p-4">
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="lyrics">Текст</TabsTrigger>
+            <TabsTrigger value="translation">Перевод</TabsTrigger>
+          </TabsList>
+          <TabsContent value="lyrics" className="mt-6">
+            <div className="space-y-4">
+              {bhajan.lyricsWithChords.map((section, index) => (
+                <div key={index} className="space-y-2">
+                  {section.chords && (
+                    <div className="text-sm font-mono text-primary flex flex-wrap gap-x-4 gap-y-2">
+                      {section.chords.split(/\s+/).map((chord, i) => chord ? <Chord key={i} name={chord} instrument={selectedInstrument} /> : null)}
+                    </div>
+                  )}
+                  <div className="zen-body whitespace-pre-line leading-relaxed">
+                    {section.lyrics.split(' ').map((word, wordIndex) => (
+                      <React.Fragment key={wordIndex}><Word>{word}</Word>{' '}</React.Fragment>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </TabsContent>
+          <TabsContent value="translation" className="mt-6">
+            <div className="zen-body whitespace-pre-line">{bhajan.translation}</div>
+          </TabsContent>
+        </Tabs>
+      </div>
+    </div>
+  );
+}
 
 function LessonsScreen() {
     const navigate = useNavigate();
