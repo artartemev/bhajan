@@ -1,10 +1,13 @@
-const API_URL = 'https://bhajan.miracall.net/api';
-
 const LIST_BHAJANS_QUERY = `query Query { listBhajans { title author audioPath options } }`;
 const GET_BHAJAN_QUERY = `query GetBhajan($author: String!, $title: String!) { getBhajan(author: $author, title: $title) { author title chords text translation audioPath reviewPath lessons } }`;
 
 async function fetchGraphQL(query: string, variables?: Record<string, any>) {
-  const response = await fetch(API_URL, {
+  // Use same-origin proxy to avoid CORS; vercel.json rewrites /api/bhajan-proxy → bhajan.miracall.net/api
+  const url = typeof window !== 'undefined'
+    ? '/api/bhajan-proxy'
+    : 'https://bhajan.miracall.net/api';
+
+  const response = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ query, variables }),

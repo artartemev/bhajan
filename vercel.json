@@ -1,0 +1,8 @@
+{
+  "rewrites": [
+    {
+      "source": "/api/bhajan-proxy",
+      "destination": "https://bhajan.miracall.net/api"
+    }
+  ]
+}
