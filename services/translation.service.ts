@@ -74,12 +74,19 @@ async function callOpenRouter(word: string, model: string, timeoutMs: number): P
   }
 }
 
-const MODELS: Array<{ id: string; timeout: number }> = [
+const MODELS_LOCAL: Array<{ id: string; timeout: number }> = [
   { id: 'google/gemma-4-31b-it:free', timeout: 120_000 },
   { id: 'google/gemini-2.5-flash-lite', timeout: 60_000 },
 ];
 
-export async function translateWordWithAi(word: string): Promise<TranslationResult> {
+// Tighter timeouts for Vercel serverless (max 60s per function)
+const MODELS_SERVER: Array<{ id: string; timeout: number }> = [
+  { id: 'google/gemma-4-31b-it:free', timeout: 45_000 },
+  { id: 'google/gemini-2.5-flash-lite', timeout: 45_000 },
+];
+
+export async function translateWordWithAi(word: string, serverMode = true): Promise<TranslationResult> {
+  const MODELS = serverMode ? MODELS_SERVER : MODELS_LOCAL;
   let lastError: unknown;
   for (const { id, timeout } of MODELS) {
     for (let attempt = 1; attempt <= 2; attempt++) {

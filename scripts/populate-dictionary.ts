@@ -80,7 +80,7 @@ async function main() {
     process.stdout.write(`${progress} "${word}" ... `);
 
     try {
-      const translation = await translateWordWithAi(word);
+      const translation = await translateWordWithAi(word, false);
       await prisma.word.create({
         data: {
           sourceText: word,
