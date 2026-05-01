@@ -1,35 +1,17 @@
-// File: pages/api/bhajan-proxy.ts
 import type { NextApiRequest, NextApiResponse } from 'next';
+import { enforceRateLimit } from '../../lib/api-protection';
+import { proxyBhajanRequest } from '../../services/bhajan.service';
 
-const API_URL = 'https://bhajan.miracall.net/api';
-
-export default async function handler(
-  req: NextApiRequest,
-  res: NextApiResponse
-) {
-  if (req.method !== 'POST') {
-    return res.status(405).json({ message: 'Method Not Allowed' });
-  }
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  if (req.method !== 'POST') return res.status(405).json({ message: 'Method Not Allowed' });
+  if (!enforceRateLimit(req, res, 40, 60_000)) return;
 
   try {
-    const response = await fetch(API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(req.body), // Просто перенаправляем тело запроса
-    });
-
-    if (!response.ok) {
-      // Перенаправляем статус ошибки от внешнего API
-      return res.status(response.status).json({ message: 'Error from external API' });
-    }
-
-    const data = await response.json();
-    res.status(200).json(data);
-
+    const result = await proxyBhajanRequest(req.body);
+    if (!result.ok) return res.status(result.status).json({ message: 'Error from external API', data: result.data });
+    return res.status(200).json(result.data);
   } catch (error) {
     console.error('Proxy Error:', error);
-    res.status(500).json({ message: 'Internal Server Error in proxy' });
+    return res.status(500).json({ message: 'Internal Server Error in proxy' });
   }
 }
