@@ -1,9 +1,9 @@
 // File: pages/index.tsx (финальная рабочая версия с русским интерфейсом)
 
-import React, { useState, useRef, useEffect, createContext, useContext } from "react";
+import React, { useState, useEffect } from "react";
 import dynamic from 'next/dynamic';
 import { BrowserRouter as Router, Routes, Route, Link, useNavigate, useLocation, useParams } from "react-router-dom";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { Search, Play, Pause, Heart, Settings, Home, SkipBack, SkipForward, Plus, Minus, Info, DollarSign, ArrowLeft, BookOpen, Music, Music4, WifiOff, Filter, X, Share2, Check, Moon, Sun } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -11,54 +11,12 @@ import { apiClient, inferRPCOutputType } from "../client/api";
 import { Popover, PopoverContent, PopoverTrigger, Button, Card, CardContent, CardHeader, CardTitle, Input, Label, Badge, Tabs, TabsContent, TabsList, TabsTrigger, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Slider } from "../components/ui";
 import { getCachedBhajans, setCachedBhajans, fetchAndCacheDictionary } from '../lib/db';
 import { Word } from "../components/Word";
+import { useAudio } from "../features/audio/audio-context";
+import { useShareBhajan } from "../features/shared/hooks/useShareBhajan";
+import { useTheme } from "../features/shared/hooks/useTheme";
+import { useFavorites } from "../features/shared/hooks/useFavorites";
 
 type Bhajan = inferRPCOutputType<"listBhajans">[0];
-const AudioContext = createContext<any>(null);
-
-// SHARING
-function useShareBhajan() {
-  const [copiedId, setCopiedId] = React.useState<string | null>(null);
-
-  const share = async (bhajan: { id: string; title: string; author: string }) => {
-    const url = `${window.location.origin}/bhajan/${bhajan.id}`;
-    const shareData = { title: bhajan.title, text: `${bhajan.title} — ${bhajan.author}`, url };
-
-    if (navigator.share) {
-      try { await navigator.share(shareData); return; } catch {}
-    }
-    try {
-      await navigator.clipboard.writeText(url);
-      setCopiedId(bhajan.id);
-      setTimeout(() => setCopiedId(null), 2000);
-    } catch {
-      prompt("Скопируйте ссылку:", url);
-    }
-  };
-
-  return { share, copiedId };
-}
-
-// DARK THEME
-function useTheme() {
-  const [isDark, setIsDark] = useState(false);
-
-  useEffect(() => {
-    const stored = localStorage.getItem('theme');
-    const dark = stored === 'dark' || (!stored && window.matchMedia('(prefers-color-scheme: dark)').matches);
-    setIsDark(dark);
-    document.documentElement.classList.toggle('dark', dark);
-  }, []);
-
-  const toggle = () => {
-    const next = !isDark;
-    setIsDark(next);
-    document.documentElement.classList.toggle('dark', next);
-    localStorage.setItem('theme', next ? 'dark' : 'light');
-  };
-
-  return { isDark, toggle };
-}
-
 // CHORD TRANSPOSITION
 const SHARP_NOTES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 const FLAT_TO_SHARP: Record<string, string> = {
@@ -94,27 +52,6 @@ function CopyToast({ visible }: { visible: boolean }) {
   );
 }
 
-// ХУКИ И ПРОВАЙДЕРЫ
-const useFavorites = () => {
-    const [favoriteIds, setFavoriteIds] = useState<string[]>([]);
-    const queryClient = useQueryClient();
-    useEffect(() => { const storedFavorites = localStorage.getItem('bhajanFavorites'); if (storedFavorites) { setFavoriteIds(JSON.parse(storedFavorites)); } }, []);
-    const toggleFavorite = (bhajanId: string) => { const newFavoriteIds = favoriteIds.includes(bhajanId) ? favoriteIds.filter(id => id !== bhajanId) : [...favoriteIds, bhajanId]; setFavoriteIds(newFavoriteIds); localStorage.setItem('bhajanFavorites', JSON.stringify(newFavoriteIds)); queryClient.invalidateQueries(); };
-    const isFavorite = (bhajanId: string) => favoriteIds.includes(bhajanId);
-    return { favoriteIds, toggleFavorite, isFavorite };
-};
-
-export function AudioProvider({ children }: { children: React.ReactNode }) {
-    const audioRef = useRef<HTMLAudioElement>(null);
-    const [currentTrack, setCurrentTrack] = useState<any>(null); const [isPlaying, setIsPlaying] = useState(false); const [currentTime, setCurrentTime] = useState(0); const [duration, setDuration] = useState(0); const [playbackRate, setPlaybackRate] = useState(1);
-    useEffect(() => { const audio = audioRef.current; if (!audio) return; const updateTime = () => setCurrentTime(audio.currentTime); const updateDuration = () => setDuration(audio.duration); const handleEnded = () => setIsPlaying(false); audio.addEventListener("timeupdate", updateTime); audio.addEventListener("loadedmetadata", updateDuration); audio.addEventListener("ended", handleEnded); return () => { audio.removeEventListener("timeupdate", updateTime); audio.removeEventListener("loadedmetadata", updateDuration); audio.removeEventListener("ended", handleEnded); }; }, [currentTrack]);
-    const play = async (track: any) => { const audio = audioRef.current; if (!audio) return; if (currentTrack?.id !== track.id) { setCurrentTrack(track); audio.src = track.audioUrl; } await audio.play(); setIsPlaying(true); };
-    const pause = () => { if (audioRef.current) { audioRef.current.pause(); setIsPlaying(false); } };
-    const seek = (time: number) => { if (audioRef.current) audioRef.current.currentTime = time; };
-    const handlePlaybackRateChange = (rate: number) => { setPlaybackRate(rate); if (audioRef.current) audioRef.current.playbackRate = rate; };
-    return (<AudioContext.Provider value={{ currentTrack, isPlaying, currentTime, duration, playbackRate, play, pause, seek, setPlaybackRate: handlePlaybackRateChange }}><audio ref={audioRef} />{children}</AudioContext.Provider>);
-}
-function useAudio() { return useContext(AudioContext); }
 function formatTime(seconds: number): string { const mins = Math.floor(seconds / 60); const secs = Math.floor(seconds % 60); return `${mins}:${secs.toString().padStart(2, "0")}`; }
 
 // КОМПОНЕНТЫ
