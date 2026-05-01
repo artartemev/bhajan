@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { apiClient } from '../client/api';
 import { LessonPlayer } from '../components/LessonPlayer';
-import type { LessonData } from '../lib/lesson';
+import { normalizeLesson, type LessonData } from '../lib/lesson';
 
 const cleanWord = (w: string) => w.toLowerCase().replace(/[.,!?;:""«»\-–—]/g, '').trim();
 
@@ -16,6 +16,15 @@ function readFileAsDataUrl(file: File) {
     reader.onload = () => resolve(String(reader.result));
     reader.onerror = () => reject(reader.error);
     reader.readAsDataURL(file);
+  });
+}
+
+function readFileAsText(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(reader.error);
+    reader.readAsText(file);
   });
 }
 
@@ -89,10 +98,28 @@ export default function AdminPage() {
   function applyLessonJson() {
     try {
       const parsed = JSON.parse(lessonText);
-      setLesson(parsed);
-      setLessonStatus('JSON применён к предпросмотру.');
+      const normalized = normalizeLesson(parsed, selectedBhajan?.title || 'Bhajan lesson');
+      setLesson(normalized);
+      setLessonText(JSON.stringify(normalized, null, 2));
+      setLessonStatus(`JSON применён к предпросмотру: ${normalized.steps.length} шагов.`);
     } catch (error: any) {
       setLessonStatus(error?.message ?? 'JSON содержит ошибку');
+    }
+  }
+
+  async function loadLessonJsonFile(file: File | null) {
+    if (!file) return;
+    try {
+      const text = await readFileAsText(file);
+      setLessonText(text);
+      const parsed = JSON.parse(text);
+      const normalized = normalizeLesson(parsed, selectedBhajan?.title || 'Bhajan lesson');
+      setLesson(normalized);
+      setLessonText(JSON.stringify(normalized, null, 2));
+      setLessonStatus(`JSON загружен: ${normalized.steps.length} шагов. Проверьте предпросмотр.`);
+    } catch (error: any) {
+      setLesson(null);
+      setLessonStatus(error?.message ?? 'Не удалось прочитать JSON');
     }
   }
 
@@ -243,6 +270,16 @@ export default function AdminPage() {
                 style={{ border: '1px solid #ddd', borderRadius: 8, padding: 9, fontSize: 14, background: '#fff' }}
               />
             </label>
+
+            <label style={{ display: 'grid', gap: 6, fontSize: 13, color: '#555' }}>
+              Готовый lesson JSON
+              <input
+                type="file"
+                accept=".json,application/json"
+                onChange={event => loadLessonJsonFile(event.target.files?.[0] ?? null)}
+                style={{ border: '1px solid #ddd', borderRadius: 8, padding: 9, fontSize: 14, background: '#fff' }}
+              />
+            </label>
           </div>
 
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 16 }}>
@@ -256,6 +293,17 @@ export default function AdminPage() {
               }}
             >
               {isConvertingLesson ? 'Конвертируем...' : 'Сконвертировать'}
+            </button>
+            <button
+              onClick={applyLessonJson}
+              disabled={!lessonText.trim()}
+              style={{
+                background: '#fff', color: '#111827', border: '1px solid #ddd', borderRadius: 8,
+                padding: '10px 18px', fontSize: 15, cursor: 'pointer', fontWeight: 600,
+                opacity: !lessonText.trim() ? 0.55 : 1,
+              }}
+            >
+              Предпросмотр из JSON
             </button>
             <button
               onClick={saveLesson}
@@ -272,30 +320,35 @@ export default function AdminPage() {
 
           {lessonStatus && <p style={{ color: lessonStatus.includes('Ошибка') || lessonStatus.includes('error') ? '#c33' : '#555', marginBottom: 16 }}>{lessonStatus}</p>}
 
-          {lesson && (
-            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: 16 }}>
-              <div>
-                <h3 style={{ fontSize: 15, fontWeight: 600, marginBottom: 8 }}>Предпросмотр</h3>
+          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: 16 }}>
+            <div>
+              <h3 style={{ fontSize: 15, fontWeight: 600, marginBottom: 8 }}>Предпросмотр</h3>
+              {lesson ? (
                 <LessonPlayer lesson={lesson} compact />
-              </div>
-              <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                  <h3 style={{ fontSize: 15, fontWeight: 600, margin: 0 }}>Lesson JSON</h3>
-                  <button
-                    onClick={applyLessonJson}
-                    style={{ background: '#fff', border: '1px solid #ddd', borderRadius: 8, padding: '6px 10px', cursor: 'pointer' }}
-                  >
-                    Применить правки
-                  </button>
+              ) : (
+                <div style={{ border: '1px dashed #ddd', borderRadius: 8, minHeight: 220, display: 'grid', placeItems: 'center', color: '#888', padding: 24, textAlign: 'center' }}>
+                  Сконвертируйте схему или вставьте JSON, чтобы увидеть урок.
                 </div>
-                <textarea
-                  value={lessonText}
-                  onChange={event => setLessonText(event.target.value)}
-                  style={{ width: '100%', minHeight: 420, border: '1px solid #ddd', borderRadius: 8, padding: 12, fontFamily: 'monospace', fontSize: 12 }}
-                />
-              </div>
+              )}
             </div>
-          )}
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <h3 style={{ fontSize: 15, fontWeight: 600, margin: 0 }}>Lesson JSON</h3>
+                <button
+                  onClick={applyLessonJson}
+                  style={{ background: '#fff', border: '1px solid #ddd', borderRadius: 8, padding: '6px 10px', cursor: 'pointer' }}
+                >
+                  Применить правки
+                </button>
+              </div>
+              <textarea
+                value={lessonText}
+                onChange={event => setLessonText(event.target.value)}
+                placeholder="Вставьте сюда JSON от внешней LLM и нажмите «Предпросмотр из JSON»."
+                style={{ width: '100%', minHeight: 420, border: '1px solid #ddd', borderRadius: 8, padding: 12, fontFamily: 'monospace', fontSize: 12 }}
+              />
+            </div>
+          </div>
         </div>
 
         {/* Dictionary card */}
