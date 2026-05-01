@@ -201,7 +201,6 @@ function BhajanDetailScreen() {
   const [showInterlinear, setShowInterlinear] = useState(false);
   const audio = useAudio();
   const { data: bhajan } = useQuery(["bhajan", id], () => apiClient.getBhajanDetail({ id: id! }), { enabled: !!id });
-  const { data: generatedLesson } = useQuery(["generated-lesson", id], () => fetchGeneratedLesson(id!), { enabled: !!id, retry: false });
   const { toggleFavorite, isFavorite } = useFavorites();
   const { share, copiedId } = useShareBhajan();
 
@@ -236,7 +235,7 @@ function BhajanDetailScreen() {
         <div className="flex gap-2 mb-4 flex-wrap">
           {bhajan.hasAudio && bhajan.snippetUrl && <Button variant="outline" size="sm" onClick={() => playAudio(bhajan.snippetUrl!, 'snippet')}><Music4 className="h-4 w-4 mr-2" />Слушать фрагмент</Button>}
           {bhajan.hasAnalyses && bhajan.analysisUrl && <Button variant="outline" size="sm" onClick={() => playAudio(bhajan.analysisUrl!, 'analysis')}><BookOpen className="h-4 w-4 mr-2" />Слушать разбор</Button>}
-          {(bhajan.hasLessons || generatedLesson) && <Button variant="outline" size="sm" onClick={() => navigate(`/bhajan/${bhajan.id}/lessons`)}><BookOpen className="h-4 w-4 mr-2" />Смотреть уроки</Button>}
+          <Button variant="outline" size="sm" onClick={() => navigate(`/bhajan/${bhajan.id}/lessons`)}><BookOpen className="h-4 w-4 mr-2" />Смотреть уроки</Button>
         </div>
         <div className="flex gap-2 items-center">
           <Select value={selectedInstrument} onValueChange={setSelectedInstrument}>
