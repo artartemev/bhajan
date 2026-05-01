@@ -9,7 +9,7 @@
     "start": "next start",
     "lint": "next lint",
     "postinstall": "npx prisma generate",
-    "vercel-build": "npx prisma migrate deploy && next build",
+    "vercel-build": "npx prisma generate && next build",
     "populate": "ts-node --compiler-options '{\"module\":\"commonjs\",\"moduleResolution\":\"node\"}' scripts/populate-dictionary.ts"
   },
   "dependencies": {
