@@ -2,8 +2,9 @@
 
 // 1. Tells Prisma how to connect to your database
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 // 2. Tells Prisma to generate the JavaScript client
