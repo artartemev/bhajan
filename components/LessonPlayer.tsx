@@ -10,31 +10,54 @@ type LessonPlayerProps = {
 
 const NOTES_FREQ: Record<string, number> = {
   C3: 130.81,
+  Db3: 138.59,
   D3: 146.83,
+  Eb3: 155.56,
   E3: 164.81,
   F3: 174.61,
+  Gb3: 185,
   G3: 196,
+  Ab3: 207.65,
   A3: 220,
+  Bb3: 233.08,
   B3: 246.94,
   C4: 261.63,
   Db4: 277.18,
+  'C#4': 277.18,
   D4: 293.66,
   Eb4: 311.13,
+  'D#4': 311.13,
   E4: 329.63,
   F4: 349.23,
   Gb4: 369.99,
+  'F#4': 369.99,
   G4: 392,
   Ab4: 415.3,
+  'G#4': 415.3,
   A4: 440,
   Bb4: 466.16,
+  'A#4': 466.16,
   B4: 493.88,
   C5: 523.25,
+  Db5: 554.37,
   D5: 587.33,
+  Eb5: 622.25,
   E5: 659.25,
   F5: 698.46,
+  Gb5: 739.99,
   G5: 783.99,
+  Ab5: 830.61,
   A5: 880,
+  Bb5: 932.33,
   B5: 987.77,
+};
+
+const KEY_NOTE_ALIASES: Record<string, string> = {
+  'C#4': 'Db4',
+  'D#4': 'Eb4',
+  'F#4': 'Gb4',
+  'G#4': 'Ab4',
+  'A#4': 'Bb4',
 };
 
 const KEYS = [
@@ -94,7 +117,7 @@ export function LessonPlayer({ lesson, compact = false }: LessonPlayerProps) {
   const audioRef = useRef<AudioContext | null>(null);
 
   const activeStep: LessonStep | undefined = activeIndex === null ? undefined : lesson.steps[activeIndex];
-  const activeNote = activeStep?.note;
+  const activeNote = activeStep?.note ? KEY_NOTE_ALIASES[activeStep.note] ?? activeStep.note : undefined;
   const parts = useMemo(() => Array.from(new Set(lesson.steps.map(step => step.part).filter(Boolean))), [lesson.steps]);
 
   async function play() {

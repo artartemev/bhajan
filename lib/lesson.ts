@@ -29,6 +29,23 @@ const SWARA_TO_NOTE: Record<string, string> = {
   N: 'B4',
 };
 
+const KOMAL_SWARA_TO_NOTE: Record<string, string> = {
+  R: 'Db4',
+  G: 'Eb4',
+  D: 'Ab4',
+  N: 'Bb4',
+};
+
+const NOTE_ALIASES: Record<string, string> = {
+  'C#': 'Db',
+  'D#': 'Eb',
+  'F#': 'Gb',
+  'G#': 'Ab',
+  'A#': 'Bb',
+};
+
+const INLINE_SWARA_RE = /^[SRGMPDNsrgmpdn](?:[#♯+b♭])?['’`´.]?$/;
+
 function extractJson(content: string) {
   const fenced = content.match(/```(?:json)?\s*([\s\S]*?)```/i);
   const raw = fenced?.[1] ?? content;
@@ -40,27 +57,127 @@ function extractJson(content: string) {
   return JSON.parse(raw.slice(start, end + 1));
 }
 
+function normalizeNoteName(note: string): string | null {
+  const cleaned = String(note || '').trim().replace('♯', '#').replace('♭', 'b');
+  const match = cleaned.match(/^([A-G])([#b]?)([3-5])$/i);
+  if (!match) return null;
+
+  const pitch = `${match[1].toUpperCase()}${match[2]}`;
+  const alias = NOTE_ALIASES[pitch] ?? pitch;
+  return `${alias}${match[3]}`;
+}
+
+function parseSwaraToken(rawSwara: string): { swara: string; note: string | null } {
+  const raw = String(rawSwara || '').trim();
+  if (!raw || raw === '-') return { swara: raw, note: null };
+
+  const normalized = raw
+    .replace('♯', '#')
+    .replace('♭', 'b')
+    .replace('С', 'S')
+    .replace('Р', 'R')
+    .replace('М', 'M');
+
+  const token = normalized.match(/[SRGMPDNsrgmpdn](?:[#b+])?/);
+  if (!token) return { swara: raw, note: null };
+
+  const value = token[0];
+  const letter = value[0];
+  const base = letter.toUpperCase();
+  const accidental = value.slice(1);
+  let note = SWARA_TO_NOTE[base] ?? null;
+
+  if (letter === letter.toLowerCase() && KOMAL_SWARA_TO_NOTE[base]) {
+    note = base === 'M' ? 'Gb4' : KOMAL_SWARA_TO_NOTE[base];
+  }
+  if (accidental === 'b' && KOMAL_SWARA_TO_NOTE[base]) note = KOMAL_SWARA_TO_NOTE[base];
+  if ((accidental === '#' || accidental === '+') && base === 'M') note = 'Gb4';
+
+  if (!note) return { swara: raw, note: null };
+
+  const pitch = note.slice(0, -1);
+  const hasUpperMark = /['’`´̇]|[ṠṘĠṀṖḊṄ]/.test(raw);
+  const hasLowerMark = /[̣]|[ṢṚḤḶṂṆḌ]/.test(raw);
+  if (hasUpperMark) note = `${pitch}5`;
+  if (hasLowerMark) note = `${pitch}3`;
+
+  return { swara: raw, note };
+}
+
 function inferNoteFromSwara(swara: string): string | null {
-  const cleaned = String(swara || '').trim();
-  const base = cleaned.match(/[SRGMPDN]/i)?.[0]?.toUpperCase();
-  if (!base) return null;
+  return parseSwaraToken(swara).note;
+}
 
-  const root = SWARA_TO_NOTE[base];
-  if (!root) return null;
+function splitInlineNotation(rawLyric: string) {
+  const tokens = String(rawLyric || '').split(/\s+/).filter(Boolean);
+  const swaraTokens = tokens.filter(token => INLINE_SWARA_RE.test(token));
+  if (!swaraTokens.length) {
+    return {
+      lyric: String(rawLyric || '').trim(),
+      swara: '',
+    };
+  }
 
-  const pitch = root.slice(0, -1);
-  const hasUpperMark = /['’`´̇]|[ṠṘĠṀṖḊṄ]/.test(cleaned);
-  const hasLowerMark = /[̣]|[ṢṚḤḶṂṆḌ]/.test(cleaned);
-  if (hasUpperMark) return `${pitch}5`;
-  if (hasLowerMark) return `${pitch}3`;
-  return root;
+  return {
+    lyric: tokens.filter(token => !INLINE_SWARA_RE.test(token)).join(' ').trim(),
+    swara: swaraTokens[swaraTokens.length - 1],
+  };
+}
+
+function expandInlineNotation(input: any) {
+  const rawLyric = String(input?.lyric ?? input?.syllable ?? input?.text ?? '').trim();
+  const hasExplicitSwara = Boolean(String(input?.swara ?? input?.svara ?? input?.noteName ?? '').trim());
+  if (hasExplicitSwara || !rawLyric || !/\s/.test(rawLyric)) return [input];
+
+  const tokens = rawLyric.split(/\s+/).filter(Boolean);
+  if (!tokens.some(token => INLINE_SWARA_RE.test(token))) return [input];
+
+  const expanded: any[] = [];
+  let lyricBuffer: string[] = [];
+  let beat = Number(input?.beat);
+
+  for (const token of tokens) {
+    if (INLINE_SWARA_RE.test(token)) {
+      const lyric = lyricBuffer.join(' ').trim();
+      expanded.push({
+        ...input,
+        lyric,
+        syllable: undefined,
+        text: undefined,
+        swara: token,
+        beat: Number.isFinite(beat) ? beat : input?.beat,
+        wordBreak: lyric ? !lyric.endsWith('-') : false,
+      });
+      lyricBuffer = [];
+      if (Number.isFinite(beat)) beat += 1;
+    } else {
+      lyricBuffer.push(token);
+    }
+  }
+
+  if (lyricBuffer.length) {
+    expanded.push({
+      ...input,
+      lyric: lyricBuffer.join(' ').trim(),
+      syllable: undefined,
+      text: undefined,
+      swara: '',
+      beat: Number.isFinite(beat) ? beat : input?.beat,
+      wordBreak: true,
+    });
+  }
+
+  return expanded.length ? expanded : [input];
 }
 
 function normalizeStep(input: any, index: number): LessonStep | null {
-  const swara = String(input?.swara ?? input?.svara ?? input?.noteName ?? '').trim();
-  const lyric = String(input?.lyric ?? input?.syllable ?? '').trim();
+  const rawSwara = String(input?.swara ?? input?.svara ?? input?.noteName ?? '').trim();
+  const inline = splitInlineNotation(String(input?.lyric ?? input?.syllable ?? input?.text ?? '').trim());
+  const swara = rawSwara || inline.swara;
+  const lyric = inline.lyric;
   const isRest = Boolean(input?.rest) || swara === '-' || swara.toLowerCase() === 'rest';
-  const note = isRest ? null : String(input?.note ?? '').trim() || inferNoteFromSwara(swara);
+  const explicitNote = normalizeNoteName(String(input?.note ?? '').trim());
+  const note = isRest ? null : explicitNote || inferNoteFromSwara(swara);
   const duration = Number(input?.duration ?? input?.durationMs ?? 500);
 
   if (!swara && !lyric && !note) return null;
@@ -79,6 +196,7 @@ function normalizeStep(input: any, index: number): LessonStep | null {
 export function normalizeLesson(input: any, fallbackTitle = 'Bhajan lesson'): LessonData {
   const rawSteps = Array.isArray(input?.steps) ? input.steps : Array.isArray(input?.melody) ? input.melody : [];
   const steps = rawSteps
+    .flatMap((step: any) => expandInlineNotation(step))
     .map((step: any, index: number) => normalizeStep(step, index))
     .filter(Boolean) as LessonStep[];
 
