@@ -178,11 +178,12 @@ export function LessonPlayer({ lesson, compact = false }: LessonPlayerProps) {
         <div className="min-h-24 rounded-md border border-dashed bg-background p-4 flex flex-col items-center justify-center">
           <div className="flex flex-wrap justify-center gap-x-2 gap-y-2 text-xl font-semibold uppercase tracking-normal">
             {lesson.steps.map((step, index) => {
-              const text = step.lyric || step.swara || '-';
+              const text = step.lyric;
               return (
                 <span
                   key={`${step.part ?? 'p'}-${index}`}
-                  className={`transition-colors ${activeIndex === index ? 'text-primary' : 'text-muted-foreground/60'} ${step.wordBreak ? 'mr-2' : ''}`}
+                  aria-hidden={!text}
+                  className={`transition-colors ${activeIndex === index ? 'text-primary' : 'text-muted-foreground/60'} ${step.wordBreak ? 'mr-2' : ''} ${text ? '' : 'w-1'}`}
                 >
                   {text}
                 </span>

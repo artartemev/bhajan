@@ -36,10 +36,12 @@ Return ONLY a valid JSON object with this schema:
 Rules:
 - Preserve the order by part number and then left-to-right beat order.
 - IMPORTANT: isolated Latin notation tokens S R G M P D N are music notes, not karaoke lyric text. Never put these isolated note tokens into "lyric".
+- The karaoke lyric must contain only Cyrillic syllables/words. Do not show swara tokens as fallback lyrics when a note has no syllable; use "lyric": "".
 - If OCR gives linear text like "НАМА- G АМИШ- S", convert it into separate steps:
   {"lyric":"НАМА-","swara":"G"} then {"lyric":"АМИШ-","swara":"S"}.
 - Map swaras to notes in C: S=C4, R=D4, G=E4, M=F4, P=G4, D=A4, N=B4.
 - Accidentals: Rb/r=Db, Gb/g=Eb, M#/M+=Gb, Db/d=Ab, Nb/n=Bb. Use note names with octave, for example Db4, Gb4, Bb4.
+- In this notation, an underlined swara is a black key: underlined R/G/D/N are komal (Db/Eb/Ab/Bb), underlined M is tivra Ma (Gb). OCR may represent underline as _, R̲, Ṟ, or a visible line under the letter.
 - Upper octave marks/dots/apostrophes use octave 5. Lower octave marks/dots below use octave 3.
 - Use duration 500 for a normal beat, 1000 when a cell visibly spans two beats, 1500 for three beats, 250 for very short passing notes. Do not guess all notes as the same length if cells visibly have different widths.
 - If a lyric syllable is printed under or immediately before/after a swara, copy only that syllable in Russian. If a note has no lyric, use an empty string.

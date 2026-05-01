@@ -44,7 +44,8 @@ const NOTE_ALIASES: Record<string, string> = {
   'A#': 'Bb',
 };
 
-const INLINE_SWARA_RE = /^[SRGMPDNsrgmpdn](?:[#♯+b♭])?['’`´.]?$/;
+const UNDERLINE_MARK_RE = /[_̲̱̠]/;
+const INLINE_SWARA_RE = /^[SRGMPDNsrgmpdn](?:[#♯+b♭_̲̱̠])?['’`´.̣̇]*$/;
 
 function extractJson(content: string) {
   const fenced = content.match(/```(?:json)?\s*([\s\S]*?)```/i);
@@ -67,6 +68,17 @@ function normalizeNoteName(note: string): string | null {
   return `${alias}${match[3]}`;
 }
 
+function cleanInlineToken(token: string) {
+  return String(token || '')
+    .trim()
+    .replace(/^[([{]+/, '')
+    .replace(/[)\]},.;:]+$/, '');
+}
+
+function isInlineSwaraToken(token: string) {
+  return INLINE_SWARA_RE.test(cleanInlineToken(token));
+}
+
 function parseSwaraToken(rawSwara: string): { swara: string; note: string | null } {
   const raw = String(rawSwara || '').trim();
   if (!raw || raw === '-') return { swara: raw, note: null };
@@ -78,13 +90,14 @@ function parseSwaraToken(rawSwara: string): { swara: string; note: string | null
     .replace('Р', 'R')
     .replace('М', 'M');
 
-  const token = normalized.match(/[SRGMPDNsrgmpdn](?:[#b+])?/);
+  const token = normalized.match(/[SRGMPDNsrgmpdn](?:[#b+_̲̱̠])?/);
   if (!token) return { swara: raw, note: null };
 
   const value = token[0];
   const letter = value[0];
   const base = letter.toUpperCase();
   const accidental = value.slice(1);
+  const isUnderlined = UNDERLINE_MARK_RE.test(raw) || UNDERLINE_MARK_RE.test(accidental);
   let note = SWARA_TO_NOTE[base] ?? null;
 
   if (letter === letter.toLowerCase() && KOMAL_SWARA_TO_NOTE[base]) {
@@ -92,6 +105,8 @@ function parseSwaraToken(rawSwara: string): { swara: string; note: string | null
   }
   if (accidental === 'b' && KOMAL_SWARA_TO_NOTE[base]) note = KOMAL_SWARA_TO_NOTE[base];
   if ((accidental === '#' || accidental === '+') && base === 'M') note = 'Gb4';
+  if (isUnderlined && KOMAL_SWARA_TO_NOTE[base]) note = KOMAL_SWARA_TO_NOTE[base];
+  if (isUnderlined && base === 'M') note = 'Gb4';
 
   if (!note) return { swara: raw, note: null };
 
@@ -110,7 +125,7 @@ function inferNoteFromSwara(swara: string): string | null {
 
 function splitInlineNotation(rawLyric: string) {
   const tokens = String(rawLyric || '').split(/\s+/).filter(Boolean);
-  const swaraTokens = tokens.filter(token => INLINE_SWARA_RE.test(token));
+  const swaraTokens = tokens.filter(isInlineSwaraToken);
   if (!swaraTokens.length) {
     return {
       lyric: String(rawLyric || '').trim(),
@@ -119,8 +134,8 @@ function splitInlineNotation(rawLyric: string) {
   }
 
   return {
-    lyric: tokens.filter(token => !INLINE_SWARA_RE.test(token)).join(' ').trim(),
-    swara: swaraTokens[swaraTokens.length - 1],
+    lyric: tokens.filter(token => !isInlineSwaraToken(token)).join(' ').trim(),
+    swara: cleanInlineToken(swaraTokens[swaraTokens.length - 1]),
   };
 }
 
@@ -130,21 +145,21 @@ function expandInlineNotation(input: any) {
   if (hasExplicitSwara || !rawLyric || !/\s/.test(rawLyric)) return [input];
 
   const tokens = rawLyric.split(/\s+/).filter(Boolean);
-  if (!tokens.some(token => INLINE_SWARA_RE.test(token))) return [input];
+  if (!tokens.some(isInlineSwaraToken)) return [input];
 
   const expanded: any[] = [];
   let lyricBuffer: string[] = [];
   let beat = Number(input?.beat);
 
   for (const token of tokens) {
-    if (INLINE_SWARA_RE.test(token)) {
+    if (isInlineSwaraToken(token)) {
       const lyric = lyricBuffer.join(' ').trim();
       expanded.push({
         ...input,
         lyric,
         syllable: undefined,
         text: undefined,
-        swara: token,
+        swara: cleanInlineToken(token),
         beat: Number.isFinite(beat) ? beat : input?.beat,
         wordBreak: lyric ? !lyric.endsWith('-') : false,
       });
