@@ -1,97 +1,113 @@
-// File: scripts/populate-dictionary.ts (Corrected Version)
+// Script to populate the dictionary by translating all words from all bhajans.
+// Run: npx ts-node --compiler-options '{"module":"commonjs","moduleResolution":"node"}' scripts/populate-dictionary.ts
+// Or:  npm run populate
+
+import { readFileSync } from 'fs';
+import { join } from 'path';
+
+// Load .env.local without external deps
+function loadEnvFile(filename: string) {
+  try {
+    const content = readFileSync(join(process.cwd(), filename), 'utf-8');
+    for (const line of content.split('\n')) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#')) continue;
+      const eqIdx = trimmed.indexOf('=');
+      if (eqIdx === -1) continue;
+      const key = trimmed.slice(0, eqIdx).trim();
+      const value = trimmed.slice(eqIdx + 1).trim().replace(/^["']|["']$/g, '');
+      if (!process.env[key]) process.env[key] = value;
+    }
+  } catch {
+    // file not found — skip
+  }
+}
+loadEnvFile('.env.local');
+loadEnvFile('.env');
 
 import { PrismaClient } from '@prisma/client';
-// ✅ ИСПРАВЛЕНИЕ: Импортируем обе функции API
+import { translateWordWithAi } from '../services/translation.service';
 import { listBhajans, getBhajanDetail } from '../api';
 
 const prisma = new PrismaClient();
 
-const cleanWord = (word: string): string => {
-  return word.toLowerCase().replace(/[.,!?;:"“]/g, '');
-};
+const cleanWord = (word: string): string =>
+  word.toLowerCase().replace(/[.,!?;:""«»\-–—]/g, '').trim();
 
-const fetchTranslation = async (word: string) => {
-  const response = await fetch('http://localhost:3000/api/translate-word', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ word }),
-  });
-  if (!response.ok) {
-    throw new Error(`Failed to fetch translation for ${word}: ${response.statusText}`);
-  }
-  return response.json();
-};
+// Delay between API calls to respect free-tier rate limits
+const DELAY_MS = 3000;
 
 async function main() {
-  console.log('🚀 Starting dictionary population script...');
+  console.log('Starting dictionary population...');
 
-  // 1. Получаем СПИСОК всех бхаджанов
-  const allBhajanstubs = await listBhajans({});
-  if (!allBhajanstubs || allBhajanstubs.length === 0) {
-    console.log('No bhajans found to process.');
+  const allBhajanStubs = await listBhajans({});
+  if (!allBhajanStubs?.length) {
+    console.log('No bhajans found.');
     return;
   }
-  console.log(`✅ Found ${allBhajanstubs.length} bhajans. Fetching details...`);
+  console.log(`Found ${allBhajanStubs.length} bhajans. Collecting words...`);
 
-  // 2. Собираем все уникальные слова, теперь получая полные данные по каждому бхаджану
   const uniqueWords = new Set<string>();
-  for (const bhajanStub of allBhajanstubs) {
-    // ✅ ИСПРАВЛЕНИЕ: Получаем полные данные, включая 'lyricsWithChords'
-    const bhajanDetail = await getBhajanDetail({ id: bhajanStub.id });
-    bhajanDetail.lyricsWithChords?.forEach((line: { lyrics: string }) => {
-      line.lyrics.split(/\s+/).forEach(word => {
-        const cleaned = cleanWord(word);
-        if (cleaned.length > 2) {
-          uniqueWords.add(cleaned);
-        }
-      });
-    });
-  }
-  console.log(`🔍 Found ${uniqueWords.size} unique words to process.`);
-
-  // ✅ ИСПРАВЛЕНИЕ: Конвертируем Set в массив перед итерацией
-  const wordsToProcess = Array.from(uniqueWords);
-  
-  let newWordsCount = 0;
-  for (const word of wordsToProcess) {
-    const existingWord = await prisma.word.findUnique({
-      where: { sourceText: word },
-    });
-
-    if (!existingWord) {
-      try {
-        console.log(`⏳ Translating new word: "${word}"...`);
-        const translation = await fetchTranslation(word);
-        
-        await prisma.word.create({
-          data: {
-            sourceText: word,
-            sourceLanguage: translation.sourceLanguage,
-            transliteration: translation.transliteration,
-            russianTranslation: translation.russianTranslation,
-            englishTranslation: translation.englishTranslation,
-            spiritualMeaning: translation.spiritualMeaning,
-            isProperNoun: translation.isProperNoun,
-            confidence: translation.confidence,
-          },
+  for (const stub of allBhajanStubs) {
+    try {
+      const detail = await getBhajanDetail({ id: stub.id });
+      detail.lyricsWithChords?.forEach((line: { lyrics: string }) => {
+        line.lyrics.split(/\s+/).forEach(w => {
+          const cleaned = cleanWord(w);
+          if (cleaned.length > 2) uniqueWords.add(cleaned);
         });
-        newWordsCount++;
-        console.log(`💾 Saved translation for "${word}".`);
-        await new Promise(res => setTimeout(res, 1000));
-      } catch (error) {
-        console.error(`❌ Failed to process word "${word}":`, error);
-      }
+      });
+    } catch (err) {
+      console.error(`  Failed to fetch bhajan ${stub.id}:`, err);
     }
   }
 
-  console.log(`✨ Script finished. Added ${newWordsCount} new words to the dictionary.`);
+  const words = Array.from(uniqueWords);
+  console.log(`Found ${words.length} unique words. Checking database...`);
+
+  const existing = await prisma.word.findMany({ select: { sourceText: true } });
+  const existingSet = new Set(existing.map(w => w.sourceText));
+  const toTranslate = words.filter(w => !existingSet.has(w));
+
+  console.log(`${existingSet.size} words already in DB. Translating ${toTranslate.length} new words...\n`);
+
+  let saved = 0;
+  let failed = 0;
+
+  for (let i = 0; i < toTranslate.length; i++) {
+    const word = toTranslate[i];
+    const progress = `[${i + 1}/${toTranslate.length}]`;
+    process.stdout.write(`${progress} "${word}" ... `);
+
+    try {
+      const translation = await translateWordWithAi(word, false);
+      await prisma.word.create({
+        data: {
+          sourceText: word,
+          sourceLanguage: translation.sourceLanguage,
+          transliteration: translation.transliteration,
+          russianTranslation: translation.russianTranslation,
+          englishTranslation: translation.englishTranslation,
+          spiritualMeaning: translation.spiritualMeaning ?? null,
+          isProperNoun: translation.isProperNoun,
+          confidence: translation.confidence,
+        },
+      });
+      console.log(`✓ ${translation.russianTranslation}`);
+      saved++;
+    } catch (err: any) {
+      console.log(`✗ ${err?.message ?? err}`);
+      failed++;
+    }
+
+    if (i < toTranslate.length - 1) {
+      await new Promise(r => setTimeout(r, DELAY_MS));
+    }
+  }
+
+  console.log(`\nDone. Saved: ${saved}, Failed: ${failed}, Total in DB: ${existingSet.size + saved}`);
 }
 
 main()
-  .catch(e => {
-    console.error(e);
-    process.exit(1);
-  })
-  .finally(async () => {
-    await prisma.$disconnect();
-  });
+  .catch(e => { console.error(e); process.exit(1); })
+  .finally(() => prisma.$disconnect());

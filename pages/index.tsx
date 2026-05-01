@@ -9,7 +9,7 @@ import { motion, AnimatePresence } from "framer-motion";
 
 import { apiClient, inferRPCOutputType } from "../client/api";
 import { Popover, PopoverContent, PopoverTrigger, Button, Card, CardContent, CardHeader, CardTitle, Input, Label, Badge, Tabs, TabsContent, TabsList, TabsTrigger, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Slider } from "../components/ui";
-import { getCachedBhajans, setCachedBhajans, fetchAndCacheDictionary } from '../lib/db';
+import { getCachedBhajans, setCachedBhajans, fetchAndCacheDictionary, getWordFromCachedDictionary } from '../lib/db';
 import { Word } from "../components/Word";
 import { AudioProvider, useAudio } from "../features/audio/audio-context";
 import { useShareBhajan } from "../features/shared/hooks/useShareBhajan";
@@ -95,6 +95,24 @@ function PianoChordDiagram({ notes, description }: { notes: string; description:
 function ChordDiagramDisplay({ chordData }: { chordData: { frets?: string; notes?: string; description: string; instrument: string; }; }) { const { frets, notes, description, instrument } = chordData; if ((instrument === "harmonium" || instrument === "piano") && notes) { return <PianoChordDiagram notes={notes} description={description} />; } if (!frets) return null; const numStrings = instrument === "ukulele" ? 4 : 6; const numFrets = 5; const width = instrument === "ukulele" ? 80 : 100; const height = 120; const paddingTop = 20; const paddingLeft = 10; const stringSpacing = (width - paddingLeft * 2) / (numStrings - 1); const fretSpacing = (height - paddingTop) / numFrets; return (<div className="p-2 bg-card rounded-md border"><p className="text-center font-bold text-sm mb-1">{description}</p><p className="text-center text-xs text-muted-foreground mb-2 capitalize">{instrument}</p><svg width={width} height={height} viewBox={`0 0 ${width} ${height}`}>{ [...Array(numFrets + 1)].map((_, i) => (<line key={i} x1={paddingLeft} y1={paddingTop + i * fretSpacing} x2={width - paddingLeft} y2={paddingTop + i * fretSpacing} stroke="currentColor" strokeWidth={i === 0 ? "2" : "0.5"} />))}{[...Array(numStrings)].map((_, i) => (<line key={i} x1={paddingLeft + i * stringSpacing} y1={paddingTop} x2={paddingLeft + i * stringSpacing} y2={height} stroke="currentColor" strokeWidth="0.5" />))}{frets.split("").map((fret, stringIndex) => { const fretNum = fret === "x" || fret === "X" ? -1 : parseInt(fret, 10); if (fretNum > 0) { return (<circle key={stringIndex} cx={paddingLeft + stringIndex * stringSpacing} cy={paddingTop + (fretNum - 0.5) * fretSpacing} r={stringSpacing / 3.5} fill="currentColor" />); } return null; })}{frets.split("").map((fret, stringIndex) => { if (fret === "x" || fret === "X") { return (<text key={stringIndex} x={paddingLeft + stringIndex * stringSpacing} y={paddingTop - 5} textAnchor="middle" fontSize="10" fill="currentColor">×</text>); } if (fret === "0") { return (<circle key={stringIndex} cx={paddingLeft + stringIndex * stringSpacing} cy={paddingTop - 8} r={3} stroke="currentColor" fill="none" strokeWidth="1" />); } return null; })}</svg></div>); }
 function ChordContent({ chordName, instrument }: { chordName: string; instrument: string; }) { const { data, isLoading, error } = useQuery(["chord", chordName, instrument], () => apiClient.getChordDiagram({ chord: chordName, instrument }), { staleTime: Infinity, retry: false }); if (isLoading) return <div className="p-4 text-center">Загрузка...</div>; if (error || !data?.found) { return (<div className="p-4 text-center text-sm text-muted-foreground">Схема аккорда недоступна</div>); } return <ChordDiagramDisplay chordData={{ frets: data.frets, notes: data.notes, description: data.description || "Неизвестный аккорд", instrument: data.instrument || instrument }} />; }
 function Chord({ name, instrument }: { name: string; instrument: string }) { if (!name?.trim()) return <span>{name}</span>; return (<Popover><PopoverTrigger asChild><span className="cursor-pointer font-bold hover:underline text-devotional-saffron transition-colors">{name}</span></PopoverTrigger><PopoverContent className="w-auto p-0 chord-tooltip"><ChordContent chordName={name} instrument={instrument} /></PopoverContent></Popover>); }
+
+function InterlinearWord({ children }: { children: string }) {
+  const cleaned = children.toLowerCase().replace(/[.,!?;:""«»]/g, '');
+  const { data } = useQuery<any>({
+    queryKey: ['word', cleaned],
+    queryFn: () => getWordFromCachedDictionary(cleaned),
+    enabled: cleaned.length >= 3,
+    staleTime: Infinity,
+    retry: false,
+  });
+  const translation = data?.russianTranslation || '';
+  return (
+    <span className="inline-flex flex-col items-center mx-0.5 align-bottom">
+      <span className="text-xs text-devotional-saffron leading-tight min-h-[1.1em] text-center">{translation}</span>
+      <span>{children}</span>
+    </span>
+  );
+}
 function extractYouTubeVideoId(url: string): string | null { if(!url) return null; const patterns = [/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([a-zA-Z0-9_-]{11})/,]; for (const pattern of patterns) { const match = url.match(pattern); if (match && match[1]) return match[1]; } return null; }
 function InfoPage({ title, children }: { title: string; children: React.ReactNode }) { const navigate = useNavigate(); return (<div className="pb-32"><header className="sticky top-0 bg-background/95 backdrop-blur-sm border-b border-border p-4 zen-shadow"><div className="flex items-center gap-4"><Button variant="ghost" size="sm" onClick={() => navigate(-1)}><ArrowLeft className="h-4 w-4" /></Button><h1 className="text-xl font-medium zen-heading">{title}</h1></div></header><div className="p-4 prose dark:prose-invert max-w-none zen-body">{children}</div></div>); }
 function FilterButton({ label, value, selectedValues, onToggle }: { label: string; value: string; selectedValues: string[]; onToggle: (value: string) => void; }) { const isSelected = selectedValues.includes(value); return (<Button variant={isSelected ? "default" : "outline"} size="sm" onClick={() => onToggle(value)} className="capitalize">{label}</Button>); }
@@ -170,6 +188,8 @@ function BhajanDetailScreen() {
   const [selectedInstrument, setSelectedInstrument] = useState("guitar");
   const [activeTab, setActiveTab] = useState("lyrics");
   const [transpose, setTranspose] = useState(0);
+  const [showChords, setShowChords] = useState(true);
+  const [showInterlinear, setShowInterlinear] = useState(false);
   const audio = useAudio();
   const { data: bhajan } = useQuery(["bhajan", id], () => apiClient.getBhajanDetail({ id: id! }), { enabled: !!id });
   const { toggleFavorite, isFavorite } = useFavorites();
@@ -226,6 +246,10 @@ function BhajanDetailScreen() {
         {transpose !== 0 && (
           <button onClick={() => setTranspose(0)} className="text-xs text-muted-foreground underline mt-1">сбросить транспозицию</button>
         )}
+        <div className="flex gap-2 mt-2">
+          <Button variant={showChords ? "default" : "outline"} size="sm" onClick={() => setShowChords(v => !v)}>Аккорды</Button>
+          <Button variant={showInterlinear ? "default" : "outline"} size="sm" onClick={() => setShowInterlinear(v => !v)}>Перевод</Button>
+        </div>
       </header>
       <div className="p-4">
         <Tabs value={activeTab} onValueChange={setActiveTab}>
@@ -237,14 +261,16 @@ function BhajanDetailScreen() {
             <div className="space-y-4">
               {bhajan.lyricsWithChords.map((section, index) => (
                 <div key={index} className="space-y-2">
-                  {section.chords && (
+                  {section.chords && showChords && (
                     <div className="text-sm font-mono text-primary flex flex-wrap gap-x-4 gap-y-2">
                       {section.chords.split(/\s+/).map((chord, i) => chord ? <Chord key={i} name={transposeChord(chord, transpose)} instrument={selectedInstrument} /> : null)}
                     </div>
                   )}
-                  <div className="zen-body whitespace-pre-line leading-relaxed">
+                  <div className={`zen-body leading-relaxed ${showInterlinear ? 'flex flex-wrap gap-x-1 gap-y-3 items-end' : 'whitespace-pre-line'}`}>
                     {section.lyrics.split(' ').map((word, wordIndex) => (
-                      <React.Fragment key={wordIndex}><Word>{word}</Word>{' '}</React.Fragment>
+                      showInterlinear
+                        ? <InterlinearWord key={wordIndex}>{word}</InterlinearWord>
+                        : <React.Fragment key={wordIndex}><Word>{word}</Word>{' '}</React.Fragment>
                     ))}
                   </div>
                 </div>
