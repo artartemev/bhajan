@@ -11,7 +11,7 @@ import { apiClient, inferRPCOutputType } from "../client/api";
 import { Popover, PopoverContent, PopoverTrigger, Button, Card, CardContent, CardHeader, CardTitle, Input, Label, Badge, Tabs, TabsContent, TabsList, TabsTrigger, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Slider } from "../components/ui";
 import { getCachedBhajans, setCachedBhajans, fetchAndCacheDictionary } from '../lib/db';
 import { Word } from "../components/Word";
-import { useAudio } from "../features/audio/audio-context";
+import { AudioProvider, useAudio } from "../features/audio/audio-context";
 import { useShareBhajan } from "../features/shared/hooks/useShareBhajan";
 import { useTheme } from "../features/shared/hooks/useTheme";
 import { useFavorites } from "../features/shared/hooks/useFavorites";
