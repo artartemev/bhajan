@@ -1,6 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import prisma from '../../../lib/prisma';
 import { normalizeLesson } from '../../../lib/lesson';
+import { ensureLessonTable } from '../../../lib/lesson-table';
 
 export const config = {
   api: {
@@ -23,6 +24,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   try {
     const normalizedLesson = normalizeLesson(lesson, bhajanTitle);
+    await ensureLessonTable(prisma);
     const saved = await (prisma as any).lesson.upsert({
       where: { bhajanId: String(bhajanId) },
       update: {

@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import prisma from '../../../lib/prisma';
+import { ensureLessonTable } from '../../../lib/lesson-table';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'GET') {
@@ -13,6 +14,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
+    await ensureLessonTable(prisma);
     const lesson = await (prisma as any).lesson.findUnique({
       where: { bhajanId },
       select: {
