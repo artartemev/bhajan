@@ -1,20 +1,12 @@
-import { z } from 'zod';
-
-const translationSchema = z.object({
-  sourceLanguage: z.string()
-    .transform(v => { const l = v.toLowerCase(); return (['sanskrit','bengali'].includes(l) ? l : 'unknown') as 'sanskrit'|'bengali'|'unknown'; })
-    .catch('unknown'),
-  transliteration: z.string().catch(''),
-  russianTranslation: z.string().catch(''),
-  englishTranslation: z.string().catch(''),
-  spiritualMeaning: z.string().optional().catch(undefined),
-  isProperNoun: z.boolean().catch(false),
-  confidence: z.string()
-    .transform(v => { const l = v.toLowerCase(); return (['high','medium','low'].includes(l) ? l : 'medium') as 'high'|'medium'|'low'; })
-    .catch('medium'),
-});
-
-export type TranslationResult = z.infer<typeof translationSchema>;
+export type TranslationResult = {
+  sourceLanguage: 'sanskrit' | 'bengali' | 'unknown';
+  transliteration: string;
+  russianTranslation: string;
+  englishTranslation: string;
+  spiritualMeaning?: string;
+  isProperNoun: boolean;
+  confidence: 'high' | 'medium' | 'low';
+};
 
 const SYSTEM_PROMPT = `You are a specialized translator for Sanskrit and Bengali devotional texts (bhajans, kirtans).
 Given a single word, respond with ONLY a valid JSON object — no markdown, no explanation.
@@ -29,10 +21,25 @@ JSON must match this schema exactly:
   "confidence": "high" | "medium" | "low"
 }`;
 
-function extractJson(text: string): unknown {
-  const jsonMatch = text.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) throw new Error('No JSON object found in response');
-  return JSON.parse(jsonMatch[0]);
+function parseTranslation(content: string): TranslationResult {
+  // Extract JSON even if model wraps it in markdown or text
+  const match = content.match(/\{[\s\S]*\}/);
+  if (!match) throw new Error('No JSON found in model response');
+
+  const obj = JSON.parse(match[0]);
+
+  const lang = String(obj.sourceLanguage ?? '').toLowerCase().trim();
+  const conf = String(obj.confidence ?? '').toLowerCase().trim();
+
+  return {
+    sourceLanguage: (['sanskrit', 'bengali'].includes(lang) ? lang : 'unknown') as TranslationResult['sourceLanguage'],
+    transliteration: String(obj.transliteration ?? '').trim(),
+    russianTranslation: String(obj.russianTranslation ?? obj.russian ?? '').trim(),
+    englishTranslation: String(obj.englishTranslation ?? obj.english ?? '').trim(),
+    spiritualMeaning: obj.spiritualMeaning ? String(obj.spiritualMeaning).trim() : undefined,
+    isProperNoun: Boolean(obj.isProperNoun ?? false),
+    confidence: (['high', 'medium', 'low'].includes(conf) ? conf : 'medium') as TranslationResult['confidence'],
+  };
 }
 
 async function callOpenRouter(word: string, model: string, timeoutMs: number): Promise<TranslationResult> {
@@ -71,8 +78,7 @@ async function callOpenRouter(word: string, model: string, timeoutMs: number): P
     const content: string = data?.choices?.[0]?.message?.content;
     if (!content) throw new Error('Empty response from model');
 
-    const parsed = extractJson(content);
-    return translationSchema.parse(parsed);
+    return parseTranslation(content);
   } finally {
     clearTimeout(timer);
   }
@@ -98,7 +104,6 @@ export async function translateWordWithAi(word: string, serverMode = true): Prom
         return await callOpenRouter(word, id, timeout);
       } catch (err) {
         lastError = err;
-        // Brief pause between retries
         if (attempt === 1) await new Promise(r => setTimeout(r, 2000));
       }
     }
