@@ -1,11 +1,23 @@
-import React, { useState, useRef } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { apiClient } from '../client/api';
+import { LessonPlayer } from '../components/LessonPlayer';
+import type { LessonData } from '../lib/lesson';
 
 const cleanWord = (w: string) => w.toLowerCase().replace(/[.,!?;:""«»\-–—]/g, '').trim();
 
 type LogEntry = { word: string; result: string; ok: boolean };
 
 type Phase = 'idle' | 'collecting' | 'translating' | 'done';
+type BhajanOption = { id: string; title: string; author: string };
+
+function readFileAsDataUrl(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+}
 
 export default function AdminPage() {
   const [phase, setPhase] = useState<Phase>('idle');
@@ -16,10 +28,104 @@ export default function AdminPage() {
   const [log, setLog] = useState<LogEntry[]>([]);
   const stopRef = useRef(false);
   const logRef = useRef<HTMLDivElement>(null);
+  const [bhajans, setBhajans] = useState<BhajanOption[]>([]);
+  const [selectedBhajanId, setSelectedBhajanId] = useState('');
+  const [lessonFile, setLessonFile] = useState<File | null>(null);
+  const [lesson, setLesson] = useState<LessonData | null>(null);
+  const [lessonText, setLessonText] = useState('');
+  const [lessonStatus, setLessonStatus] = useState('');
+  const [isConvertingLesson, setIsConvertingLesson] = useState(false);
+  const [isSavingLesson, setIsSavingLesson] = useState(false);
+
+  useEffect(() => {
+    apiClient.listBhajans({})
+      .then((items: BhajanOption[]) => {
+        setBhajans(items);
+        if (items[0]) setSelectedBhajanId(items[0].id);
+      })
+      .catch((error: any) => setLessonStatus(error?.message ?? 'Не удалось загрузить список бхаджанов'));
+  }, []);
+
+  const selectedBhajan = bhajans.find(b => b.id === selectedBhajanId);
 
   const addLog = (entry: LogEntry) => {
     setLog(prev => [entry, ...prev].slice(0, 200));
   };
+
+  async function convertLesson() {
+    if (!selectedBhajan || !lessonFile) {
+      setLessonStatus('Выберите бхаджан и файл PDF/PNG.');
+      return;
+    }
+
+    setIsConvertingLesson(true);
+    setLessonStatus('Конвертируем схему в урок...');
+    try {
+      const dataUrl = await readFileAsDataUrl(lessonFile);
+      const resp = await fetch('/api/admin/convert-lesson', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          bhajanId: selectedBhajan.id,
+          bhajanTitle: selectedBhajan.title,
+          bhajanAuthor: selectedBhajan.author,
+          fileName: lessonFile.name,
+          mimeType: lessonFile.type || 'application/octet-stream',
+          dataUrl,
+        }),
+      });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.error ?? 'Ошибка конвертации');
+      setLesson(data.lesson);
+      setLessonText(JSON.stringify(data.lesson, null, 2));
+      setLessonStatus(`Готово: ${data.lesson.steps.length} шагов. Проверьте предпросмотр перед сохранением.`);
+    } catch (error: any) {
+      setLessonStatus(error?.message ?? 'Ошибка конвертации');
+    } finally {
+      setIsConvertingLesson(false);
+    }
+  }
+
+  function applyLessonJson() {
+    try {
+      const parsed = JSON.parse(lessonText);
+      setLesson(parsed);
+      setLessonStatus('JSON применён к предпросмотру.');
+    } catch (error: any) {
+      setLessonStatus(error?.message ?? 'JSON содержит ошибку');
+    }
+  }
+
+  async function saveLesson() {
+    if (!selectedBhajan || !lesson) {
+      setLessonStatus('Сначала сконвертируйте или вставьте lesson JSON.');
+      return;
+    }
+
+    setIsSavingLesson(true);
+    setLessonStatus('Сохраняем урок...');
+    try {
+      const resp = await fetch('/api/admin/save-lesson', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          bhajanId: selectedBhajan.id,
+          bhajanTitle: selectedBhajan.title,
+          bhajanAuthor: selectedBhajan.author,
+          sourceFileName: lessonFile?.name,
+          sourceMimeType: lessonFile?.type,
+          lesson,
+        }),
+      });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.error ?? 'Ошибка сохранения');
+      setLessonStatus('Урок сохранён. Он появится на странице выбранного бхаджана.');
+    } catch (error: any) {
+      setLessonStatus(error?.message ?? 'Ошибка сохранения');
+    } finally {
+      setIsSavingLesson(false);
+    }
+  }
 
   async function start() {
     stopRef.current = false;
@@ -103,9 +209,94 @@ export default function AdminPage() {
 
   return (
     <div style={{ minHeight: '100vh', background: '#f5f0e8', fontFamily: 'system-ui, sans-serif' }}>
-      <div style={{ maxWidth: 640, margin: '0 auto', padding: '32px 16px' }}>
+      <div style={{ maxWidth: 980, margin: '0 auto', padding: '32px 16px' }}>
         <h1 style={{ fontSize: 24, fontWeight: 700, marginBottom: 8 }}>BhajanApp Admin</h1>
-        <p style={{ color: '#666', marginBottom: 32 }}>Управление словарём переводов</p>
+        <p style={{ color: '#666', marginBottom: 32 }}>Управление словарём и обучающими анимациями</p>
+
+        <div style={{ background: '#fff', borderRadius: 12, padding: 24, boxShadow: '0 2px 8px rgba(0,0,0,0.08)', marginBottom: 24 }}>
+          <h2 style={{ fontSize: 18, fontWeight: 600, marginBottom: 16 }}>Конвертер схемы в урок</h2>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: 16, marginBottom: 16 }}>
+            <label style={{ display: 'grid', gap: 6, fontSize: 13, color: '#555' }}>
+              Бхаджан
+              <select
+                value={selectedBhajanId}
+                onChange={event => {
+                  setSelectedBhajanId(event.target.value);
+                  setLesson(null);
+                  setLessonText('');
+                }}
+                style={{ border: '1px solid #ddd', borderRadius: 8, padding: '10px 12px', fontSize: 14, background: '#fff' }}
+              >
+                {bhajans.map(bhajan => (
+                  <option key={bhajan.id} value={bhajan.id}>{bhajan.title} — {bhajan.author}</option>
+                ))}
+              </select>
+            </label>
+
+            <label style={{ display: 'grid', gap: 6, fontSize: 13, color: '#555' }}>
+              PDF или PNG/JPG со схемой
+              <input
+                type="file"
+                accept=".pdf,image/png,image/jpeg,image/webp"
+                onChange={event => setLessonFile(event.target.files?.[0] ?? null)}
+                style={{ border: '1px solid #ddd', borderRadius: 8, padding: 9, fontSize: 14, background: '#fff' }}
+              />
+            </label>
+          </div>
+
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 16 }}>
+            <button
+              onClick={convertLesson}
+              disabled={isConvertingLesson || !lessonFile || !selectedBhajan}
+              style={{
+                background: '#111827', color: '#fff', border: 'none', borderRadius: 8,
+                padding: '10px 18px', fontSize: 15, cursor: 'pointer', fontWeight: 600,
+                opacity: isConvertingLesson || !lessonFile || !selectedBhajan ? 0.55 : 1,
+              }}
+            >
+              {isConvertingLesson ? 'Конвертируем...' : 'Сконвертировать'}
+            </button>
+            <button
+              onClick={saveLesson}
+              disabled={isSavingLesson || !lesson}
+              style={{
+                background: '#c17f3b', color: '#fff', border: 'none', borderRadius: 8,
+                padding: '10px 18px', fontSize: 15, cursor: 'pointer', fontWeight: 600,
+                opacity: isSavingLesson || !lesson ? 0.55 : 1,
+              }}
+            >
+              {isSavingLesson ? 'Сохраняем...' : 'Сохранить урок'}
+            </button>
+          </div>
+
+          {lessonStatus && <p style={{ color: lessonStatus.includes('Ошибка') || lessonStatus.includes('error') ? '#c33' : '#555', marginBottom: 16 }}>{lessonStatus}</p>}
+
+          {lesson && (
+            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: 16 }}>
+              <div>
+                <h3 style={{ fontSize: 15, fontWeight: 600, marginBottom: 8 }}>Предпросмотр</h3>
+                <LessonPlayer lesson={lesson} compact />
+              </div>
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                  <h3 style={{ fontSize: 15, fontWeight: 600, margin: 0 }}>Lesson JSON</h3>
+                  <button
+                    onClick={applyLessonJson}
+                    style={{ background: '#fff', border: '1px solid #ddd', borderRadius: 8, padding: '6px 10px', cursor: 'pointer' }}
+                  >
+                    Применить правки
+                  </button>
+                </div>
+                <textarea
+                  value={lessonText}
+                  onChange={event => setLessonText(event.target.value)}
+                  style={{ width: '100%', minHeight: 420, border: '1px solid #ddd', borderRadius: 8, padding: 12, fontFamily: 'monospace', fontSize: 12 }}
+                />
+              </div>
+            </div>
+          )}
+        </div>
 
         {/* Dictionary card */}
         <div style={{ background: '#fff', borderRadius: 12, padding: 24, boxShadow: '0 2px 8px rgba(0,0,0,0.08)', marginBottom: 24 }}>

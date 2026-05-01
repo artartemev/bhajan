@@ -15,6 +15,8 @@ import { AudioProvider, useAudio } from "../features/audio/audio-context";
 import { useShareBhajan } from "../features/shared/hooks/useShareBhajan";
 import { useTheme } from "../features/shared/hooks/useTheme";
 import { useFavorites } from "../features/shared/hooks/useFavorites";
+import { LessonPlayer } from "../components/LessonPlayer";
+import type { LessonData } from "../lib/lesson";
 
 type Bhajan = inferRPCOutputType<"listBhajans">[0];
 // CHORD TRANSPOSITION
@@ -114,6 +116,13 @@ function InterlinearWord({ children }: { children: string }) {
   );
 }
 function extractYouTubeVideoId(url: string): string | null { if(!url) return null; const patterns = [/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([a-zA-Z0-9_-]{11})/,]; for (const pattern of patterns) { const match = url.match(pattern); if (match && match[1]) return match[1]; } return null; }
+async function fetchGeneratedLesson(id: string): Promise<LessonData | null> {
+  const response = await fetch(`/api/lessons/by-bhajan?bhajanId=${encodeURIComponent(id)}`);
+  if (response.status === 404) return null;
+  if (!response.ok) throw new Error('Lesson lookup failed');
+  const data = await response.json();
+  return data.lesson ?? null;
+}
 function InfoPage({ title, children }: { title: string; children: React.ReactNode }) { const navigate = useNavigate(); return (<div className="pb-32"><header className="sticky top-0 bg-background/95 backdrop-blur-sm border-b border-border p-4 zen-shadow"><div className="flex items-center gap-4"><Button variant="ghost" size="sm" onClick={() => navigate(-1)}><ArrowLeft className="h-4 w-4" /></Button><h1 className="text-xl font-medium zen-heading">{title}</h1></div></header><div className="p-4 prose dark:prose-invert max-w-none zen-body">{children}</div></div>); }
 function FilterButton({ label, value, selectedValues, onToggle }: { label: string; value: string; selectedValues: string[]; onToggle: (value: string) => void; }) { const isSelected = selectedValues.includes(value); return (<Button variant={isSelected ? "default" : "outline"} size="sm" onClick={() => onToggle(value)} className="capitalize">{label}</Button>); }
 
@@ -192,6 +201,7 @@ function BhajanDetailScreen() {
   const [showInterlinear, setShowInterlinear] = useState(false);
   const audio = useAudio();
   const { data: bhajan } = useQuery(["bhajan", id], () => apiClient.getBhajanDetail({ id: id! }), { enabled: !!id });
+  const { data: generatedLesson } = useQuery(["generated-lesson", id], () => fetchGeneratedLesson(id!), { enabled: !!id, retry: false });
   const { toggleFavorite, isFavorite } = useFavorites();
   const { share, copiedId } = useShareBhajan();
 
@@ -226,7 +236,7 @@ function BhajanDetailScreen() {
         <div className="flex gap-2 mb-4 flex-wrap">
           {bhajan.hasAudio && bhajan.snippetUrl && <Button variant="outline" size="sm" onClick={() => playAudio(bhajan.snippetUrl!, 'snippet')}><Music4 className="h-4 w-4 mr-2" />Слушать фрагмент</Button>}
           {bhajan.hasAnalyses && bhajan.analysisUrl && <Button variant="outline" size="sm" onClick={() => playAudio(bhajan.analysisUrl!, 'analysis')}><BookOpen className="h-4 w-4 mr-2" />Слушать разбор</Button>}
-          {bhajan.hasLessons && <Button variant="outline" size="sm" onClick={() => navigate(`/bhajan/${bhajan.id}/lessons`)}><BookOpen className="h-4 w-4 mr-2" />Смотреть уроки</Button>}
+          {(bhajan.hasLessons || generatedLesson) && <Button variant="outline" size="sm" onClick={() => navigate(`/bhajan/${bhajan.id}/lessons`)}><BookOpen className="h-4 w-4 mr-2" />Смотреть уроки</Button>}
         </div>
         <div className="flex gap-2 items-center">
           <Select value={selectedInstrument} onValueChange={setSelectedInstrument}>
@@ -290,8 +300,10 @@ function LessonsScreen() {
     const navigate = useNavigate();
     const { id } = useParams<{ id: string }>();
     const { data: bhajan } = useQuery(["bhajan", id], () => apiClient.getBhajanDetail({ id: id! }), { enabled: !!id });
+    const { data: generatedLesson, isLoading: isLessonLoading } = useQuery(["generated-lesson", id], () => fetchGeneratedLesson(id!), { enabled: !!id, retry: false });
     if (!bhajan) return <div>Загрузка...</div>;
-    if (!bhajan.lessonsUrl) return <div className="p-4">Уроки недоступны. <Button onClick={() => navigate(-1)}>Назад</Button></div>;
+    if (isLessonLoading) return <div className="p-4">Загрузка урока...</div>;
+    if (!generatedLesson && !bhajan.lessonsUrl) return <div className="p-4">Уроки недоступны. <Button onClick={() => navigate(-1)}>Назад</Button></div>;
     const videoId = extractYouTubeVideoId(bhajan.lessonsUrl);
     return (
         <div className="pb-32">
@@ -305,7 +317,9 @@ function LessonsScreen() {
                 </div>
             </header>
             <div className="p-4">
-                {videoId ? (
+                {generatedLesson ? (
+                    <LessonPlayer lesson={generatedLesson} />
+                ) : videoId ? (
                     <div className="space-y-4">
                         <div className="aspect-video w-full bg-muted rounded-lg overflow-hidden">
                             <iframe 
