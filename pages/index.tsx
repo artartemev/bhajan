@@ -105,7 +105,7 @@ function InterlinearWord({ children }: { children: string }) {
     staleTime: Infinity,
     retry: false,
   });
-  const translation = data?.russianTranslation || '';
+  const translation = data?.russianTranslation?.split(/[;,\/|]/)[0]?.trim() || '';
   return (
     <span className="inline-flex flex-col items-center mx-0.5 align-bottom">
       <span className="text-xs text-devotional-saffron leading-tight min-h-[1.1em] text-center">{translation}</span>
