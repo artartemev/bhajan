@@ -1,13 +1,17 @@
 import { z } from 'zod';
 
 const translationSchema = z.object({
-  sourceLanguage: z.enum(['sanskrit', 'bengali', 'unknown']),
-  transliteration: z.string(),
-  russianTranslation: z.string(),
-  englishTranslation: z.string(),
-  spiritualMeaning: z.string().optional(),
-  isProperNoun: z.boolean(),
-  confidence: z.enum(['high', 'medium', 'low']),
+  sourceLanguage: z.string()
+    .transform(v => { const l = v.toLowerCase(); return (['sanskrit','bengali'].includes(l) ? l : 'unknown') as 'sanskrit'|'bengali'|'unknown'; })
+    .catch('unknown'),
+  transliteration: z.string().catch(''),
+  russianTranslation: z.string().catch(''),
+  englishTranslation: z.string().catch(''),
+  spiritualMeaning: z.string().optional().catch(undefined),
+  isProperNoun: z.boolean().catch(false),
+  confidence: z.string()
+    .transform(v => { const l = v.toLowerCase(); return (['high','medium','low'].includes(l) ? l : 'medium') as 'high'|'medium'|'low'; })
+    .catch('medium'),
 });
 
 export type TranslationResult = z.infer<typeof translationSchema>;
