@@ -11,15 +11,20 @@ type LessonPlayerProps = {
 const NOTES_FREQ: Record<string, number> = {
   C3: 130.81,
   Db3: 138.59,
+  'C#3': 138.59,
   D3: 146.83,
   Eb3: 155.56,
+  'D#3': 155.56,
   E3: 164.81,
   F3: 174.61,
   Gb3: 185,
+  'F#3': 185,
   G3: 196,
   Ab3: 207.65,
+  'G#3': 207.65,
   A3: 220,
   Bb3: 233.08,
+  'A#3': 233.08,
   B3: 246.94,
   C4: 261.63,
   Db4: 277.18,
@@ -40,41 +45,65 @@ const NOTES_FREQ: Record<string, number> = {
   B4: 493.88,
   C5: 523.25,
   Db5: 554.37,
+  'C#5': 554.37,
   D5: 587.33,
   Eb5: 622.25,
+  'D#5': 622.25,
   E5: 659.25,
   F5: 698.46,
   Gb5: 739.99,
+  'F#5': 739.99,
   G5: 783.99,
   Ab5: 830.61,
+  'G#5': 830.61,
   A5: 880,
   Bb5: 932.33,
+  'A#5': 932.33,
   B5: 987.77,
 };
 
-const KEY_NOTE_ALIASES: Record<string, string> = {
-  'C#4': 'Db4',
-  'D#4': 'Eb4',
-  'F#4': 'Gb4',
-  'G#4': 'Ab4',
-  'A#4': 'Bb4',
+const SHARP_TO_FLAT: Record<string, string> = {
+  'C#': 'Db',
+  'D#': 'Eb',
+  'F#': 'Gb',
+  'G#': 'Ab',
+  'A#': 'Bb',
 };
 
-const KEYS = [
-  { note: 'C4', type: 'white', label: 'Sa' },
-  { note: 'Db4', type: 'black', label: '' },
-  { note: 'D4', type: 'white', label: 'Re' },
-  { note: 'Eb4', type: 'black', label: '' },
-  { note: 'E4', type: 'white', label: 'Ga' },
-  { note: 'F4', type: 'white', label: 'Ma' },
-  { note: 'Gb4', type: 'black', label: '' },
-  { note: 'G4', type: 'white', label: 'Pa' },
-  { note: 'Ab4', type: 'black', label: '' },
-  { note: 'A4', type: 'white', label: 'Dha' },
-  { note: 'Bb4', type: 'black', label: '' },
-  { note: 'B4', type: 'white', label: 'Ni' },
-  { note: 'C5', type: 'white', label: "Sa'" },
+const KEY_TEMPLATE = [
+  { pitch: 'C', type: 'white', label: 'S' },
+  { pitch: 'Db', type: 'black', label: 'R̲' },
+  { pitch: 'D', type: 'white', label: 'R' },
+  { pitch: 'Eb', type: 'black', label: 'G̲' },
+  { pitch: 'E', type: 'white', label: 'G' },
+  { pitch: 'F', type: 'white', label: 'M' },
+  { pitch: 'Gb', type: 'black', label: 'M̲' },
+  { pitch: 'G', type: 'white', label: 'P' },
+  { pitch: 'Ab', type: 'black', label: 'D̲' },
+  { pitch: 'A', type: 'white', label: 'D' },
+  { pitch: 'Bb', type: 'black', label: 'N̲' },
+  { pitch: 'B', type: 'white', label: 'N' },
 ];
+
+const OCTAVE_MARK: Record<number, string> = {
+  3: '̣',
+  4: '',
+  5: '̇',
+};
+
+const KEYS = [3, 4, 5].flatMap(octave =>
+  KEY_TEMPLATE.map(key => ({
+    note: `${key.pitch}${octave}`,
+    type: key.type,
+    label: `${key.label}${OCTAVE_MARK[octave]}`,
+  }))
+);
+
+function normalizeKeyboardNote(note?: string | null) {
+  const match = String(note || '').match(/^([A-G]#?b?)([3-5])$/);
+  if (!match) return undefined;
+  return `${SHARP_TO_FLAT[match[1]] ?? match[1]}${match[2]}`;
+}
 
 function wait(ms: number) {
   return new Promise(resolve => setTimeout(resolve, ms));
@@ -117,7 +146,7 @@ export function LessonPlayer({ lesson, compact = false }: LessonPlayerProps) {
   const audioRef = useRef<AudioContext | null>(null);
 
   const activeStep: LessonStep | undefined = activeIndex === null ? undefined : lesson.steps[activeIndex];
-  const activeNote = activeStep?.note ? KEY_NOTE_ALIASES[activeStep.note] ?? activeStep.note : undefined;
+  const activeNote = normalizeKeyboardNote(activeStep?.note);
   const parts = useMemo(() => Array.from(new Set(lesson.steps.map(step => step.part).filter(Boolean))), [lesson.steps]);
 
   async function play() {
@@ -196,17 +225,17 @@ export function LessonPlayer({ lesson, compact = false }: LessonPlayerProps) {
         </div>
 
         <div className="flex justify-center overflow-x-auto pb-1">
-          <div className="relative flex h-32 min-w-[352px]">
+          <div className="relative flex h-36 min-w-[920px]">
             {KEYS.map(key => {
               const isActive = activeNote === key.note;
               return (
                 <div
                   key={key.note}
                   className={[
-                    'relative flex items-end justify-center border text-[10px] pb-2 transition-colors',
+                    'relative flex items-end justify-center border text-[10px] font-semibold pb-2 transition-colors duration-100',
                     key.type === 'white'
-                      ? `h-32 w-10 rounded-b bg-white text-black ${isActive ? 'bg-primary text-primary-foreground' : ''}`
-                      : `z-10 h-20 w-7 -mx-3 rounded-b bg-zinc-900 text-white ${isActive ? 'bg-primary' : ''}`,
+                      ? `h-36 w-9 rounded-b bg-white text-black ${isActive ? 'bg-cyan-200 text-slate-950 shadow-[0_0_18px_rgba(34,211,238,0.8)]' : ''}`
+                      : `z-10 h-24 w-6 -mx-3 rounded-b bg-zinc-950 text-white ${isActive ? 'bg-cyan-300 text-slate-950 shadow-[0_0_20px_rgba(34,211,238,0.95)]' : ''}`,
                   ].join(' ')}
                 >
                   {key.label}

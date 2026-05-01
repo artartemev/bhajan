@@ -45,7 +45,9 @@ const NOTE_ALIASES: Record<string, string> = {
 };
 
 const UNDERLINE_MARK_RE = /[_̲̱̠]/;
-const INLINE_SWARA_RE = /^[SRGMPDNsrgmpdn](?:[#♯+b♭_̲̱̠])?['’`´.̣̇]*$/;
+const SWARA_LETTER_RE = /[SRGMPDNsrgmpdn]/;
+const SWARA_MARK_RE = /[#♯+b♭_̲̱̠'’`´.̣̇]/;
+const INLINE_SWARA_RE = /^-?[([]?[SRGMPDNsrgmpdn](?:[#♯+b♭_̲̱̠'’`´.̣̇]*[SRGMPDNsrgmpdn]?)*[#♯+b♭_̲̱̠'’`´.̣̇]*[)\]]?$/;
 
 function extractJson(content: string) {
   const fenced = content.match(/```(?:json)?\s*([\s\S]*?)```/i);
@@ -71,6 +73,7 @@ function normalizeNoteName(note: string): string | null {
 function cleanInlineToken(token: string) {
   return String(token || '')
     .trim()
+    .replace(/^-+/, '')
     .replace(/^[([{]+/, '')
     .replace(/[)\]},.;:]+$/, '');
 }
@@ -80,7 +83,7 @@ function isInlineSwaraToken(token: string) {
 }
 
 function parseSwaraToken(rawSwara: string): { swara: string; note: string | null } {
-  const raw = String(rawSwara || '').trim();
+  const raw = cleanInlineToken(rawSwara);
   if (!raw || raw === '-') return { swara: raw, note: null };
 
   const normalized = raw
@@ -121,6 +124,33 @@ function parseSwaraToken(rawSwara: string): { swara: string; note: string | null
 
 function inferNoteFromSwara(swara: string): string | null {
   return parseSwaraToken(swara).note;
+}
+
+function splitSwaraSequence(rawSwara: string): string[] {
+  const cleaned = cleanInlineToken(rawSwara)
+    .replace(/[()[\]{}]/g, '')
+    .replace(/♯/g, '#')
+    .replace(/♭/g, 'b')
+    .replace(/С/g, 'S')
+    .replace(/Р/g, 'R')
+    .replace(/М/g, 'M');
+
+  if (!cleaned || cleaned === '-') return [];
+
+  const tokens: string[] = [];
+  for (let i = 0; i < cleaned.length; i++) {
+    const char = cleaned[i];
+    if (!SWARA_LETTER_RE.test(char)) continue;
+
+    let token = char;
+    while (i + 1 < cleaned.length && SWARA_MARK_RE.test(cleaned[i + 1]) && !SWARA_LETTER_RE.test(cleaned[i + 1])) {
+      token += cleaned[i + 1];
+      i++;
+    }
+    tokens.push(token);
+  }
+
+  return tokens;
 }
 
 function splitInlineNotation(rawLyric: string) {
@@ -208,10 +238,37 @@ function normalizeStep(input: any, index: number): LessonStep | null {
   };
 }
 
+function expandCompoundSwara(input: any) {
+  const rawSwara = String(input?.swara ?? input?.svara ?? input?.noteName ?? '').trim();
+  if (!rawSwara) return [input];
+
+  const swaraTokens = splitSwaraSequence(rawSwara);
+  if (swaraTokens.length <= 1) return [input];
+
+  const rawDuration = Number(input?.duration ?? input?.durationMs ?? 500);
+  const totalDuration = Number.isFinite(rawDuration) && rawDuration > 0 ? rawDuration : 500;
+  const duration = Math.max(120, Math.round(totalDuration / swaraTokens.length));
+  const beat = Number(input?.beat);
+
+  return swaraTokens.map((swara, swaraIndex) => ({
+    ...input,
+    swara,
+    note: undefined,
+    duration,
+    durationMs: undefined,
+    beat: Number.isFinite(beat) ? beat + swaraIndex / swaraTokens.length : input?.beat,
+    lyric: swaraIndex === 0 ? input?.lyric : '',
+    syllable: swaraIndex === 0 ? input?.syllable : '',
+    text: swaraIndex === 0 ? input?.text : '',
+    wordBreak: swaraIndex === swaraTokens.length - 1 ? input?.wordBreak ?? input?.word_break : false,
+  }));
+}
+
 export function normalizeLesson(input: any, fallbackTitle = 'Bhajan lesson'): LessonData {
   const rawSteps = Array.isArray(input?.steps) ? input.steps : Array.isArray(input?.melody) ? input.melody : [];
   const steps = rawSteps
     .flatMap((step: any) => expandInlineNotation(step))
+    .flatMap((step: any) => expandCompoundSwara(step))
     .map((step: any, index: number) => normalizeStep(step, index))
     .filter(Boolean) as LessonStep[];
 

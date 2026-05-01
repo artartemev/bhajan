@@ -39,6 +39,7 @@ Rules:
 - The karaoke lyric must contain only Cyrillic syllables/words. Do not show swara tokens as fallback lyrics when a note has no syllable; use "lyric": "".
 - If OCR gives linear text like "НАМА- G АМИШ- S", convert it into separate steps:
   {"lyric":"НАМА-","swara":"G"} then {"lyric":"АМИШ-","swara":"S"}.
+- If one beat/cell contains multiple swaras, such as SG̲, PP, RG, DN, SR, split it into multiple steps inside the same beat. Put the lyric only on the first note and use "lyric": "" for the following notes in that cell. Divide the duration between those notes, for example SG̲ in one normal beat becomes S duration 250 then G̲ duration 250.
 - Map swaras to notes in C: S=C4, R=D4, G=E4, M=F4, P=G4, D=A4, N=B4.
 - Accidentals: Rb/r=Db, Gb/g=Eb, M#/M+=Gb, Db/d=Ab, Nb/n=Bb. Use note names with octave, for example Db4, Gb4, Bb4.
 - In this notation, an underlined swara is a black key: underlined R/G/D/N are komal (Db/Eb/Ab/Bb), underlined M is tivra Ma (Gb). OCR may represent underline as _, R̲, Ṟ, or a visible line under the letter.
