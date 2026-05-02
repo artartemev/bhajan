@@ -49,6 +49,63 @@ Rules:
 - Set wordBreak true at the end of visible words or phrases.
 - Keep warnings concise and useful for a human editor.`;
 
+const OCR_TABLE_PROMPT = `You are OCR stage for bhajan notation.
+
+Task: extract simplified editable table from uploaded sheet (PDF/image).
+Return ONLY valid JSON with schema:
+{
+  "title": "bhajan title",
+  "warnings": ["short Russian warnings"],
+  "rows": [
+    {
+      "part": "Часть 1.1",
+      "beat": 1,
+      "cell": "SG̲",
+      "lyric": "НАМА-",
+      "duration": 500,
+      "notes": "optional short OCR comment"
+    }
+  ]
+}
+
+Rules:
+- Preserve order by part and beat.
+- Keep raw swara text in cell exactly how OCR sees it, including underline markers _, ̲, ̱.
+- Underlined R/G/D/N and underlined M are very important; do not silently normalize them.
+- lyric should contain only printed Cyrillic lyric syllable for that cell.
+- If no lyric, set lyric to "".
+- Use duration 500 by default, 1000/1500 if the cell visibly spans 2/3 beats.
+- If uncertain about underline or accidental, add warning.`;
+
+const FROM_DRAFT_PROMPT = `You convert approved editable OCR table into final lesson JSON.
+
+Return ONLY valid JSON with schema:
+{
+  "title": "bhajan title",
+  "confidence": "high" | "medium" | "low",
+  "warnings": [],
+  "steps": [{"part":"Часть 1.1","beat":1,"swara":"S","note":"C4","lyric":"НА","duration":500,"wordBreak":false}]
+}
+
+Rules:
+- Input rows are trusted by editor.
+- Split compound swaras inside one cell into multiple steps (SG̲, PP, RG, DN, SR etc).
+- Keep lyric only on first split note, next notes with lyric "".
+- Swara mapping: S=C4,R=D4,G=E4,M=F4,P=G4,D=A4,N=B4.
+- Underlined R/G/D/N -> Db/Eb/Ab/Bb. Underlined M or M#/M+ -> Gb.
+- Lowercase r/g/d/n are komal too.
+- Keep beat order and part grouping.
+- Preserve duration from rows; split equally for compound cells.`;
+
+function extractJson(content: string) {
+  const fenced = String(content || '').match(/```(?:json)?\s*([\s\S]*?)```/i);
+  const raw = fenced?.[1] ?? String(content || '');
+  const start = raw.indexOf('{');
+  const end = raw.lastIndexOf('}');
+  if (start === -1 || end === -1 || end <= start) throw new Error('No JSON object found');
+  return JSON.parse(raw.slice(start, end + 1));
+}
+
 function makeFilePart(dataUrl: string, mimeType: string, fileName: string) {
   if (mimeType.startsWith('image/')) {
     return { type: 'image_url', image_url: { url: dataUrl } };
@@ -74,9 +131,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(500).json({ error: 'OPENROUTER_API_KEY is not configured' });
   }
 
-  const { dataUrl, mimeType, fileName, bhajanTitle } = req.body ?? {};
-  if (!dataUrl || !mimeType || !fileName) {
-    return res.status(400).json({ error: 'dataUrl, mimeType and fileName are required' });
+  const { dataUrl, mimeType, fileName, bhajanTitle, mode = 'ocr', ocrDraft } = req.body ?? {};
+  if (mode === 'ocr' && (!dataUrl || !mimeType || !fileName)) {
+    return res.status(400).json({ error: 'dataUrl, mimeType and fileName are required for OCR mode' });
+  }
+  if (mode === 'from-draft' && !ocrDraft) {
+    return res.status(400).json({ error: 'ocrDraft is required for from-draft mode' });
   }
 
   try {
@@ -89,14 +149,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         'X-Title': 'BhajanApp Lesson Converter',
       },
       body: JSON.stringify({
-        model: 'google/gemini-2.5-flash',
+        model: mode === 'ocr' ? 'baidu/qianfan-ocr-fast:free' : 'google/gemini-2.5-flash',
         messages: [
           {
             role: 'user',
-            content: [
-              { type: 'text', text: `${CONVERTER_PROMPT}\n\nSelected bhajan: ${bhajanTitle || 'unknown'}` },
-              makeFilePart(dataUrl, mimeType, fileName),
-            ],
+            content: mode === 'ocr'
+              ? [
+                { type: 'text', text: `${OCR_TABLE_PROMPT}\n\nSelected bhajan: ${bhajanTitle || 'unknown'}` },
+                makeFilePart(dataUrl, mimeType, fileName),
+              ]
+              : [
+                { type: 'text', text: `${FROM_DRAFT_PROMPT}\n\nSelected bhajan: ${bhajanTitle || 'unknown'}\n\nOCR draft:\n${JSON.stringify(ocrDraft)}` },
+              ],
           },
         ],
         temperature: 0.1,
@@ -113,7 +177,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(502).json({ error: 'Empty response from converter model' });
     }
 
-    const lesson = parseLessonFromModelResponse(content, bhajanTitle || fileName);
+    if (mode === 'ocr') {
+      const draft = extractJson(content);
+      return res.status(200).json({ draft });
+    }
+
+    const lesson = parseLessonFromModelResponse(content, bhajanTitle || fileName || 'Bhajan lesson');
     return res.status(200).json({ lesson });
   } catch (error: any) {
     return res.status(500).json({ error: error?.message ?? 'Lesson conversion failed' });
