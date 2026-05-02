@@ -2,6 +2,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import prisma from '../../../lib/prisma';
 import { normalizeLesson } from '../../../lib/lesson';
 import { ensureLessonTable } from '../../../lib/lesson-table';
+import { getBhajanIdVariants, normalizeBhajanId } from '../../../lib/bhajan-id';
 
 export const config = {
   api: {
@@ -24,25 +25,32 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   try {
     const normalizedLesson = normalizeLesson(lesson, bhajanTitle);
+    const canonicalBhajanId = normalizeBhajanId(String(bhajanId));
+    const bhajanIdVariants = getBhajanIdVariants(String(bhajanId));
     await ensureLessonTable(prisma);
-    const saved = await (prisma as any).lesson.upsert({
-      where: { bhajanId: String(bhajanId) },
-      update: {
-        bhajanTitle: String(bhajanTitle),
-        bhajanAuthor: String(bhajanAuthor ?? ''),
-        sourceFileName: sourceFileName ? String(sourceFileName) : null,
-        sourceMimeType: sourceMimeType ? String(sourceMimeType) : null,
-        data: normalizedLesson,
-      },
-      create: {
-        bhajanId: String(bhajanId),
-        bhajanTitle: String(bhajanTitle),
-        bhajanAuthor: String(bhajanAuthor ?? ''),
-        sourceFileName: sourceFileName ? String(sourceFileName) : null,
-        sourceMimeType: sourceMimeType ? String(sourceMimeType) : null,
-        data: normalizedLesson,
-      },
+
+    const existing = await (prisma as any).lesson.findFirst({
+      where: { bhajanId: { in: bhajanIdVariants } },
+      select: { id: true },
     });
+
+    const payload = {
+      bhajanId: canonicalBhajanId,
+      bhajanTitle: String(bhajanTitle),
+      bhajanAuthor: String(bhajanAuthor ?? ''),
+      sourceFileName: sourceFileName ? String(sourceFileName) : null,
+      sourceMimeType: sourceMimeType ? String(sourceMimeType) : null,
+      data: normalizedLesson,
+    };
+
+    const saved = existing
+      ? await (prisma as any).lesson.update({
+        where: { id: existing.id },
+        data: payload,
+      })
+      : await (prisma as any).lesson.create({
+        data: payload,
+      });
 
     return res.status(200).json({ id: saved.id, lesson: saved.data });
   } catch (error: any) {
