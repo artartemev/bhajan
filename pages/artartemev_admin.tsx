@@ -42,6 +42,7 @@ export default function AdminPage() {
   const [lessonFile, setLessonFile] = useState<File | null>(null);
   const [lesson, setLesson] = useState<LessonData | null>(null);
   const [lessonText, setLessonText] = useState('');
+  const [ocrDraftText, setOcrDraftText] = useState('');
   const [lessonStatus, setLessonStatus] = useState('');
   const [isConvertingLesson, setIsConvertingLesson] = useState(false);
   const [isSavingLesson, setIsSavingLesson] = useState(false);
@@ -68,13 +69,14 @@ export default function AdminPage() {
     }
 
     setIsConvertingLesson(true);
-    setLessonStatus('Конвертируем схему в урок...');
+    setLessonStatus('OCR: распознаём схему в черновую таблицу...');
     try {
       const dataUrl = await readFileAsDataUrl(lessonFile);
       const resp = await fetch('/api/admin/convert-lesson', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          mode: 'ocr',
           bhajanId: selectedBhajan.id,
           bhajanTitle: selectedBhajan.title,
           bhajanAuthor: selectedBhajan.author,
@@ -85,11 +87,45 @@ export default function AdminPage() {
       });
       const data = await resp.json();
       if (!resp.ok) throw new Error(data.error ?? 'Ошибка конвертации');
+      setOcrDraftText(JSON.stringify(data.draft, null, 2));
+      setLesson(null);
+      setLessonText('');
+      setLessonStatus('OCR готов. Проверьте/исправьте таблицу и нажмите «Собрать lesson JSON из таблицы».');
+    } catch (error: any) {
+      setLessonStatus(error?.message ?? 'Ошибка конвертации');
+    } finally {
+      setIsConvertingLesson(false);
+    }
+  }
+
+  async function buildLessonFromDraft() {
+    if (!selectedBhajan || !ocrDraftText.trim()) {
+      setLessonStatus('Сначала выполните OCR и получите черновую таблицу.');
+      return;
+    }
+
+    setIsConvertingLesson(true);
+    setLessonStatus('Собираем финальный lesson JSON из утверждённой таблицы...');
+    try {
+      const draft = JSON.parse(ocrDraftText);
+      const resp = await fetch('/api/admin/convert-lesson', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mode: 'from-draft',
+          bhajanId: selectedBhajan.id,
+          bhajanTitle: selectedBhajan.title,
+          bhajanAuthor: selectedBhajan.author,
+          ocrDraft: draft,
+        }),
+      });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.error ?? 'Ошибка сборки lesson JSON');
       setLesson(data.lesson);
       setLessonText(JSON.stringify(data.lesson, null, 2));
       setLessonStatus(`Готово: ${data.lesson.steps.length} шагов. Проверьте предпросмотр перед сохранением.`);
     } catch (error: any) {
-      setLessonStatus(error?.message ?? 'Ошибка конвертации');
+      setLessonStatus(error?.message ?? 'Ошибка сборки lesson JSON');
     } finally {
       setIsConvertingLesson(false);
     }
@@ -292,7 +328,18 @@ export default function AdminPage() {
                 opacity: isConvertingLesson || !lessonFile || !selectedBhajan ? 0.55 : 1,
               }}
             >
-              {isConvertingLesson ? 'Конвертируем...' : 'Сконвертировать'}
+              {isConvertingLesson ? 'OCR...' : '1) Сделать OCR таблицу'}
+            </button>
+            <button
+              onClick={buildLessonFromDraft}
+              disabled={isConvertingLesson || !ocrDraftText.trim() || !selectedBhajan}
+              style={{
+                background: '#0f766e', color: '#fff', border: 'none', borderRadius: 8,
+                padding: '10px 18px', fontSize: 15, cursor: 'pointer', fontWeight: 600,
+                opacity: isConvertingLesson || !ocrDraftText.trim() || !selectedBhajan ? 0.55 : 1,
+              }}
+            >
+              2) Собрать lesson JSON из таблицы
             </button>
             <button
               onClick={applyLessonJson}
@@ -346,6 +393,13 @@ export default function AdminPage() {
                 onChange={event => setLessonText(event.target.value)}
                 placeholder="Вставьте сюда JSON от внешней LLM и нажмите «Предпросмотр из JSON»."
                 style={{ width: '100%', minHeight: 420, border: '1px solid #ddd', borderRadius: 8, padding: 12, fontFamily: 'monospace', fontSize: 12 }}
+              />
+              <h3 style={{ fontSize: 15, fontWeight: 600, margin: '12px 0 8px' }}>OCR черновая таблица (редактируемая)</h3>
+              <textarea
+                value={ocrDraftText}
+                onChange={event => setOcrDraftText(event.target.value)}
+                placeholder="После OCR здесь появится упрощённая таблица rows. Исправьте подчёркнутые ноты и затем нажмите «Собрать lesson JSON из таблицы»."
+                style={{ width: '100%', minHeight: 220, border: '1px solid #ddd', borderRadius: 8, padding: 12, fontFamily: 'monospace', fontSize: 12 }}
               />
             </div>
           </div>
