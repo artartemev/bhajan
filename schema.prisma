@@ -36,3 +36,15 @@ model Word {
   confidence         String
   createdAt          DateTime  @default(now())
 }
+
+model Lesson {
+  id             String   @id @default(cuid())
+  bhajanId       String   @unique
+  bhajanTitle    String
+  bhajanAuthor   String?
+  sourceFileName String?
+  sourceMimeType String?
+  data           Json
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
