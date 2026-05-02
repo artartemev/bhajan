@@ -4,9 +4,11 @@ import prisma from '../../../lib/prisma';
 export const maxDuration = 30;
 
 type WordEntry = {
-  word: string;
-  russianTranslation: string;
+  word: string;           // IAST key
+  russianTranslation?: string;
+  englishTranslation?: string;
   transliteration?: string;
+  cyrillicText?: string;
 };
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -18,14 +20,22 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   let created = 0, updated = 0;
 
-  for (const { word, russianTranslation, transliteration } of words) {
-    if (!word?.trim() || !russianTranslation?.trim()) continue;
+  for (const entry of words) {
+    const { word, russianTranslation, englishTranslation, transliteration, cyrillicText } = entry;
+    if (!word?.trim()) continue;
 
     const existing = await prisma.word.findUnique({ where: { sourceText: word } });
+
     if (existing) {
+      // Partial update — only overwrite fields that are provided
       await prisma.word.update({
         where: { sourceText: word },
-        data: { russianTranslation: russianTranslation.trim(), confidence: 'high' },
+        data: {
+          ...(russianTranslation ? { russianTranslation } : {}),
+          ...(englishTranslation ? { englishTranslation } : {}),
+          ...(transliteration ? { transliteration } : {}),
+          confidence: 'high',
+        },
       });
       updated++;
     } else {
@@ -33,9 +43,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         data: {
           sourceText: word,
           sourceLanguage: 'unknown',
-          transliteration: (transliteration || word).trim(),
-          russianTranslation: russianTranslation.trim(),
-          englishTranslation: '',
+          transliteration: transliteration || cyrillicText || word,
+          russianTranslation: russianTranslation || '',
+          englishTranslation: englishTranslation || '',
           isProperNoun: false,
           confidence: 'high',
         },
