@@ -9,6 +9,7 @@ type LogEntry = { word: string; result: string; ok: boolean };
 
 type Phase = 'idle' | 'collecting' | 'translating' | 'done';
 type BhajanOption = { id: string; title: string; author: string };
+const NOTE_OPTIONS = ['', 'C3', 'Db3', 'D3', 'Eb3', 'E3', 'F3', 'Gb3', 'G3', 'Ab3', 'A3', 'Bb3', 'B3', 'C4', 'Db4', 'D4', 'Eb4', 'E4', 'F4', 'Gb4', 'G4', 'Ab4', 'A4', 'Bb4', 'B4', 'C5', 'Db5', 'D5', 'Eb5', 'E5', 'F5', 'Gb5', 'G5', 'Ab5', 'A5', 'Bb5', 'B5'];
 
 function readFileAsDataUrl(file: File) {
   return new Promise<string>((resolve, reject) => {
@@ -42,9 +43,11 @@ export default function AdminPage() {
   const [lessonFile, setLessonFile] = useState<File | null>(null);
   const [lesson, setLesson] = useState<LessonData | null>(null);
   const [lessonText, setLessonText] = useState('');
+  const [ocrDraftText, setOcrDraftText] = useState('');
   const [lessonStatus, setLessonStatus] = useState('');
   const [isConvertingLesson, setIsConvertingLesson] = useState(false);
   const [isSavingLesson, setIsSavingLesson] = useState(false);
+  const [selectedStepIndex, setSelectedStepIndex] = useState<number>(0);
 
   useEffect(() => {
     apiClient.listBhajans({})
@@ -68,13 +71,14 @@ export default function AdminPage() {
     }
 
     setIsConvertingLesson(true);
-    setLessonStatus('Конвертируем схему в урок...');
+    setLessonStatus('OCR: распознаём схему в черновую таблицу...');
     try {
       const dataUrl = await readFileAsDataUrl(lessonFile);
       const resp = await fetch('/api/admin/convert-lesson', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          mode: 'ocr',
           bhajanId: selectedBhajan.id,
           bhajanTitle: selectedBhajan.title,
           bhajanAuthor: selectedBhajan.author,
@@ -85,11 +89,45 @@ export default function AdminPage() {
       });
       const data = await resp.json();
       if (!resp.ok) throw new Error(data.error ?? 'Ошибка конвертации');
+      setOcrDraftText(JSON.stringify(data.draft, null, 2));
+      setLesson(null);
+      setLessonText('');
+      setLessonStatus('OCR готов. Проверьте/исправьте таблицу и нажмите «Собрать lesson JSON из таблицы».');
+    } catch (error: any) {
+      setLessonStatus(error?.message ?? 'Ошибка конвертации');
+    } finally {
+      setIsConvertingLesson(false);
+    }
+  }
+
+  async function buildLessonFromDraft() {
+    if (!selectedBhajan || !ocrDraftText.trim()) {
+      setLessonStatus('Сначала выполните OCR и получите черновую таблицу.');
+      return;
+    }
+
+    setIsConvertingLesson(true);
+    setLessonStatus('Собираем финальный lesson JSON из утверждённой таблицы...');
+    try {
+      const draft = JSON.parse(ocrDraftText);
+      const resp = await fetch('/api/admin/convert-lesson', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mode: 'from-draft',
+          bhajanId: selectedBhajan.id,
+          bhajanTitle: selectedBhajan.title,
+          bhajanAuthor: selectedBhajan.author,
+          ocrDraft: draft,
+        }),
+      });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.error ?? 'Ошибка сборки lesson JSON');
       setLesson(data.lesson);
       setLessonText(JSON.stringify(data.lesson, null, 2));
       setLessonStatus(`Готово: ${data.lesson.steps.length} шагов. Проверьте предпросмотр перед сохранением.`);
     } catch (error: any) {
-      setLessonStatus(error?.message ?? 'Ошибка конвертации');
+      setLessonStatus(error?.message ?? 'Ошибка сборки lesson JSON');
     } finally {
       setIsConvertingLesson(false);
     }
@@ -105,6 +143,16 @@ export default function AdminPage() {
     } catch (error: any) {
       setLessonStatus(error?.message ?? 'JSON содержит ошибку');
     }
+  }
+
+  function updateLessonStep(index: number, patch: Partial<LessonData['steps'][number]>) {
+    setLesson(prev => {
+      if (!prev || !prev.steps[index]) return prev;
+      const nextSteps = prev.steps.map((step, i) => i === index ? { ...step, ...patch } : step);
+      const nextLesson = { ...prev, steps: nextSteps };
+      setLessonText(JSON.stringify(nextLesson, null, 2));
+      return nextLesson;
+    });
   }
 
   async function loadLessonJsonFile(file: File | null) {
@@ -292,7 +340,18 @@ export default function AdminPage() {
                 opacity: isConvertingLesson || !lessonFile || !selectedBhajan ? 0.55 : 1,
               }}
             >
-              {isConvertingLesson ? 'Конвертируем...' : 'Сконвертировать'}
+              {isConvertingLesson ? 'OCR...' : '1) Сделать OCR таблицу'}
+            </button>
+            <button
+              onClick={buildLessonFromDraft}
+              disabled={isConvertingLesson || !ocrDraftText.trim() || !selectedBhajan}
+              style={{
+                background: '#0f766e', color: '#fff', border: 'none', borderRadius: 8,
+                padding: '10px 18px', fontSize: 15, cursor: 'pointer', fontWeight: 600,
+                opacity: isConvertingLesson || !ocrDraftText.trim() || !selectedBhajan ? 0.55 : 1,
+              }}
+            >
+              2) Собрать lesson JSON из таблицы
             </button>
             <button
               onClick={applyLessonJson}
@@ -324,7 +383,76 @@ export default function AdminPage() {
             <div>
               <h3 style={{ fontSize: 15, fontWeight: 600, marginBottom: 8 }}>Предпросмотр</h3>
               {lesson ? (
-                <LessonPlayer lesson={lesson} compact />
+                <div style={{ display: 'grid', gap: 12 }}>
+                  <LessonPlayer lesson={lesson} compact />
+                  <div style={{ border: '1px solid #ddd', borderRadius: 8, padding: 12, background: '#fff' }}>
+                    <h4 style={{ margin: '0 0 8px', fontSize: 14 }}>Интерактивный редактор нот по слогам</h4>
+                    <p style={{ margin: '0 0 10px', color: '#666', fontSize: 12 }}>
+                      Кликните на слог/паузу ниже, затем измените swara, note и duration справа.
+                    </p>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
+                      {lesson.steps.map((step, index) => (
+                        <button
+                          key={`${step.part ?? 'p'}-${index}`}
+                          onClick={() => setSelectedStepIndex(index)}
+                          style={{
+                            border: index === selectedStepIndex ? '1px solid #0f766e' : '1px solid #ddd',
+                            borderRadius: 999,
+                            background: index === selectedStepIndex ? '#ccfbf1' : '#fff',
+                            padding: '4px 10px',
+                            fontSize: 12,
+                            cursor: 'pointer',
+                          }}
+                        >
+                          {step.lyric || '•'} · {step.swara || '-'}
+                        </button>
+                      ))}
+                    </div>
+
+                    {lesson.steps[selectedStepIndex] && (
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 8 }}>
+                        <label style={{ display: 'grid', gap: 4, fontSize: 12 }}>
+                          Слог
+                          <input
+                            value={lesson.steps[selectedStepIndex].lyric || ''}
+                            onChange={e => updateLessonStep(selectedStepIndex, { lyric: e.target.value })}
+                            style={{ border: '1px solid #ddd', borderRadius: 6, padding: 8 }}
+                          />
+                        </label>
+                        <label style={{ display: 'grid', gap: 4, fontSize: 12 }}>
+                          Swara
+                          <input
+                            value={lesson.steps[selectedStepIndex].swara || ''}
+                            onChange={e => updateLessonStep(selectedStepIndex, { swara: e.target.value })}
+                            style={{ border: '1px solid #ddd', borderRadius: 6, padding: 8 }}
+                          />
+                        </label>
+                        <label style={{ display: 'grid', gap: 4, fontSize: 12 }}>
+                          Note
+                          <select
+                            value={lesson.steps[selectedStepIndex].note || ''}
+                            onChange={e => updateLessonStep(selectedStepIndex, { note: e.target.value || null })}
+                            style={{ border: '1px solid #ddd', borderRadius: 6, padding: 8 }}
+                          >
+                            <option value="">(пауза)</option>
+                            {NOTE_OPTIONS.filter(Boolean).map(note => <option key={note} value={note}>{note}</option>)}
+                          </select>
+                        </label>
+                        <label style={{ display: 'grid', gap: 4, fontSize: 12 }}>
+                          Duration (ms)
+                          <input
+                            type="number"
+                            min={80}
+                            max={4000}
+                            value={lesson.steps[selectedStepIndex].duration}
+                            onChange={e => updateLessonStep(selectedStepIndex, { duration: Math.max(80, Number(e.target.value) || 500) })}
+                            style={{ border: '1px solid #ddd', borderRadius: 6, padding: 8 }}
+                          />
+                        </label>
+                      </div>
+                    )}
+                  </div>
+                </div>
               ) : (
                 <div style={{ border: '1px dashed #ddd', borderRadius: 8, minHeight: 220, display: 'grid', placeItems: 'center', color: '#888', padding: 24, textAlign: 'center' }}>
                   Сконвертируйте схему или вставьте JSON, чтобы увидеть урок.
@@ -346,6 +474,13 @@ export default function AdminPage() {
                 onChange={event => setLessonText(event.target.value)}
                 placeholder="Вставьте сюда JSON от внешней LLM и нажмите «Предпросмотр из JSON»."
                 style={{ width: '100%', minHeight: 420, border: '1px solid #ddd', borderRadius: 8, padding: 12, fontFamily: 'monospace', fontSize: 12 }}
+              />
+              <h3 style={{ fontSize: 15, fontWeight: 600, margin: '12px 0 8px' }}>OCR черновая таблица (редактируемая)</h3>
+              <textarea
+                value={ocrDraftText}
+                onChange={event => setOcrDraftText(event.target.value)}
+                placeholder="После OCR здесь появится упрощённая таблица rows. Исправьте подчёркнутые ноты и затем нажмите «Собрать lesson JSON из таблицы»."
+                style={{ width: '100%', minHeight: 220, border: '1px solid #ddd', borderRadius: 8, padding: 12, fontFamily: 'monospace', fontSize: 12 }}
               />
             </div>
           </div>
