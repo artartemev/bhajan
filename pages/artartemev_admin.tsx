@@ -14,6 +14,10 @@ type LogEntry = { word: string; result: string; ok: boolean };
 type Phase = 'idle' | 'collecting' | 'translating' | 'done';
 type BhajanOption = { id: string; title: string; author: string };
 const NOTE_OPTIONS = ['', 'C3', 'Db3', 'D3', 'Eb3', 'E3', 'F3', 'Gb3', 'G3', 'Ab3', 'A3', 'Bb3', 'B3', 'C4', 'Db4', 'D4', 'Eb4', 'E4', 'F4', 'Gb4', 'G4', 'Ab4', 'A4', 'Bb4', 'B4', 'C5', 'Db5', 'D5', 'Eb5', 'E5', 'F5', 'Gb5', 'G5', 'Ab5', 'A5', 'Bb5', 'B5'];
+<<<<<<< HEAD
+const NOTES_FREQ: Record<string, number> = { C3: 130.81, Db3: 138.59, D3: 146.83, Eb3: 155.56, E3: 164.81, F3: 174.61, Gb3: 185, G3: 196, Ab3: 207.65, A3: 220, Bb3: 233.08, B3: 246.94, C4: 261.63, Db4: 277.18, D4: 293.66, Eb4: 311.13, E4: 329.63, F4: 349.23, Gb4: 369.99, G4: 392, Ab4: 415.3, A4: 440, Bb4: 466.16, B4: 493.88, C5: 523.25, Db5: 554.37, D5: 587.33, Eb5: 622.25, E5: 659.25, F5: 698.46, Gb5: 739.99, G5: 783.99, Ab5: 830.61, A5: 880, Bb5: 932.33, B5: 987.77 };
+=======
+>>>>>>> origin/main
 
 function readFileAsDataUrl(file: File) {
   return new Promise<string>((resolve, reject) => {
@@ -81,6 +85,10 @@ function DictionaryFillSection() {
   const [isConvertingLesson, setIsConvertingLesson] = useState(false);
   const [isSavingLesson, setIsSavingLesson] = useState(false);
   const [selectedStepIndex, setSelectedStepIndex] = useState<number>(0);
+<<<<<<< HEAD
+  const audioRef = useRef<AudioContext | null>(null);
+=======
+>>>>>>> origin/main
 
   useEffect(() => {
     apiClient.listBhajans({})
@@ -186,6 +194,48 @@ function DictionaryFillSection() {
     });
   }
 
+<<<<<<< HEAD
+  function removeLessonStep(index: number) {
+    setLesson(prev => {
+      if (!prev || !prev.steps[index]) return prev;
+      const nextSteps = prev.steps.filter((_, i) => i !== index);
+      const nextLesson = { ...prev, steps: nextSteps };
+      setLessonText(JSON.stringify(nextLesson, null, 2));
+      setSelectedStepIndex(Math.max(0, Math.min(index, nextSteps.length - 1)));
+      return nextLesson;
+    });
+  }
+
+  async function playSingleStep(index: number) {
+    const step = lesson?.steps[index];
+    if (!step) return;
+    setSelectedStepIndex(index);
+    const frequency = step.note ? NOTES_FREQ[step.note] : undefined;
+    if (!frequency) return;
+
+    const AudioContextCtor = window.AudioContext || (window as any).webkitAudioContext;
+    if (!audioRef.current) audioRef.current = new AudioContextCtor();
+    if (audioRef.current.state === 'suspended') await audioRef.current.resume();
+
+    const audioCtx = audioRef.current;
+    const duration = Math.max(120, Math.min(2000, step.duration || 500)) / 1000;
+    const start = audioCtx.currentTime;
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(frequency, start);
+    gain.gain.setValueAtTime(0, start);
+    gain.gain.linearRampToValueAtTime(0.35, start + 0.03);
+    gain.gain.setValueAtTime(0.35, start + Math.max(0.04, duration - 0.06));
+    gain.gain.linearRampToValueAtTime(0, start + duration);
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.start(start);
+    osc.stop(start + duration + 0.02);
+  }
+
+=======
+>>>>>>> origin/main
   async function loadLessonJsonFile(file: File | null) {
     if (!file) return;
     try {
@@ -385,7 +435,11 @@ function DictionaryFillSection() {
                       {lesson.steps.map((step, index) => (
                         <button
                           key={`${step.part ?? 'p'}-${index}`}
+<<<<<<< HEAD
+                          onClick={() => playSingleStep(index)}
+=======
                           onClick={() => setSelectedStepIndex(index)}
+>>>>>>> origin/main
                           style={{
                             border: index === selectedStepIndex ? '1px solid #0f766e' : '1px solid #ddd',
                             borderRadius: 999,
@@ -440,6 +494,23 @@ function DictionaryFillSection() {
                             style={{ border: '1px solid #ddd', borderRadius: 6, padding: 8 }}
                           />
                         </label>
+<<<<<<< HEAD
+                        <div style={{ display: 'flex', alignItems: 'end', gap: 8 }}>
+                          <button
+                            onClick={() => playSingleStep(selectedStepIndex)}
+                            style={{ border: '1px solid #0f766e', background: '#0f766e', color: '#fff', borderRadius: 6, padding: '8px 10px', cursor: 'pointer', fontSize: 12 }}
+                          >
+                            ▶ Прослушать
+                          </button>
+                          <button
+                            onClick={() => removeLessonStep(selectedStepIndex)}
+                            style={{ border: '1px solid #dc2626', background: '#fff', color: '#dc2626', borderRadius: 6, padding: '8px 10px', cursor: 'pointer', fontSize: 12 }}
+                          >
+                            🗑 Удалить слог/ноту
+                          </button>
+                        </div>
+=======
+>>>>>>> origin/main
                       </div>
                     )}
                   </div>
