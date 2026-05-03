@@ -277,37 +277,7 @@ function DictionaryFillSection() {
   const pct = total > 0 ? Math.round((done / total) * 100) : 0;
 
   return (
-    <div style={card}>
-      <h2 style={h2}>Автозаполнение словаря (AI)</h2>
-      {phase === 'idle' || phase === 'done'
-        ? <button onClick={start} style={btnGold}>{phase === 'done' ? '🔄 Снова' : '▶ Заполнить'}</button>
-        : <button onClick={() => { stopRef.current = true; }} style={btnRed}>⏹ Стоп</button>}
-      {phase === 'collecting' && <p style={{ marginTop: 12, color: '#888', fontSize: 13 }}>⏳ Собираем слова...</p>}
-      {(phase === 'translating' || phase === 'done') && (
-        <div style={{ marginTop: 16 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#555', marginBottom: 4 }}>
-            <span>{phase === 'done' ? '✅ Готово' : `${done} / ${total}`}</span><span>{pct}%</span>
-          </div>
-          <div style={{ background: '#eee', borderRadius: 99, height: 8, overflow: 'hidden' }}>
-            <div style={{ width: `${pct}%`, background: '#c17f3b', height: '100%', transition: 'width .3s' }} />
-          </div>
-          <div style={{ display: 'flex', gap: 16, marginTop: 8, fontSize: 13 }}>
-            <span style={{ color: '#2a9' }}>✓ {done}</span>
-            <span style={{ color: '#999' }}>⟳ {skipped}</span>
-            {failed > 0 && <span style={{ color: '#c33' }}>✗ {failed}</span>}
-          </div>
-        </div>
-      )}
-      {log.length > 0 && (
-        <div style={{ marginTop: 12, maxHeight: 240, overflowY: 'auto', fontSize: 12, lineHeight: 1.8 }}>
-          {log.map((e, i) => (
-            <div key={i} style={{ borderBottom: '1px solid #f5f5f5' }}>
-              <span style={{ color: '#aaa', marginRight: 6 }}>{e.ok ? '✓' : '✗'}</span>
-              <b>{e.word}</b> — <span style={{ color: e.ok ? '#555' : '#c33' }}>{e.result}</span>
-    <div style={{ minHeight: '100vh', background: '#f5f0e8', fontFamily: 'system-ui, sans-serif' }}>
-      <div style={{ maxWidth: 980, margin: '0 auto', padding: '32px 16px' }}>
-        <h1 style={{ fontSize: 24, fontWeight: 700, marginBottom: 8 }}>BhajanApp Admin</h1>
-        <p style={{ color: '#666', marginBottom: 32 }}>Управление словарём и обучающими анимациями</p>
+    <>
 
         <div style={{ background: '#fff', borderRadius: 12, padding: 24, boxShadow: '0 2px 8px rgba(0,0,0,0.08)', marginBottom: 24 }}>
           <h2 style={{ fontSize: 18, fontWeight: 600, marginBottom: 16 }}>Конвертер схемы в урок</h2>
@@ -554,10 +524,9 @@ function DictionaryFillSection() {
                 {failed > 0 && <span style={{ color: '#c33' }}>✗ Ошибок: {failed}</span>}
               </div>
             </div>
-          ))}
+          )}
         </div>
-      )}
-    </div>
+    </>
   );
 }
 
@@ -671,8 +640,8 @@ function HtmlImportSection() {
       {/* Bhajan selector — shown only when cyrillic is pasted */}
       {needBhajan && (
         <div style={{ marginBottom: 16 }}>
-          <label style={label}>Бхаджан (для кирилличной таблицы)</label>
-          <select value={selectedId} onChange={e => setSelectedId(e.target.value)} style={select}>
+          <label style={labelStyle}>Бхаджан (для кирилличной таблицы)</label>
+          <select value={selectedId} onChange={e => setSelectedId(e.target.value)} style={selectStyle}>
             <option value="">— выбери бхаджан —</option>
             {bhajans.map(b => <option key={b.id} value={b.id}>{b.title} — {b.author}</option>)}
           </select>
@@ -687,7 +656,7 @@ function HtmlImportSection() {
         const type = slot === 'A' ? typeA : typeB;
         return (
           <div key={slot} style={{ marginBottom: 16 }}>
-            <label style={label}>
+            <label style={labelStyle}>
               Таблица {slot}
               {rows.length > 0 && <span style={{ marginLeft: 8, color: '#c17f3b', fontWeight: 400 }}>
                 {labelFor(type)} · {rows.length} строк
@@ -698,7 +667,7 @@ function HtmlImportSection() {
               onChange={e => setHtml(e.target.value)}
               placeholder="<tr><td>...</td><td>...</td></tr>..."
               rows={4}
-              style={textarea}
+              style={textareaStyle}
             />
           </div>
         );
@@ -759,9 +728,9 @@ function HtmlImportSection() {
 
 const card: React.CSSProperties = { background: '#fff', borderRadius: 12, padding: 24, boxShadow: '0 2px 8px rgba(0,0,0,.08)', marginBottom: 24 };
 const h2: React.CSSProperties = { fontSize: 18, fontWeight: 600, marginTop: 0, marginBottom: 16 };
-const label: React.CSSProperties = { fontSize: 13, fontWeight: 600, display: 'block', marginBottom: 4 };
-const select: React.CSSProperties = { width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid #ddd', fontSize: 14 };
-const textarea: React.CSSProperties = { width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid #ddd', fontSize: 12, fontFamily: 'monospace', boxSizing: 'border-box', resize: 'vertical' };
+const labelStyle: React.CSSProperties = { fontSize: 13, fontWeight: 600, display: 'block', marginBottom: 4 };
+const selectStyle: React.CSSProperties = { width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid #ddd', fontSize: 14 };
+const textareaStyle: React.CSSProperties = { width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid #ddd', fontSize: 12, fontFamily: 'monospace', boxSizing: 'border-box', resize: 'vertical' };
 const btnGold: React.CSSProperties = { background: '#c17f3b', color: '#fff', border: 'none', borderRadius: 8, padding: '10px 20px', fontSize: 14, cursor: 'pointer', fontWeight: 600 };
 const btnRed: React.CSSProperties = { ...btnGold, background: '#e55' };
 const th: React.CSSProperties = { padding: '8px 12px', textAlign: 'left', fontWeight: 600, borderBottom: '1px solid #eee', whiteSpace: 'nowrap' };
