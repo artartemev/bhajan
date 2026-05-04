@@ -1,7 +1,46 @@
 import React, { useEffect, useState, useRef } from 'react';
+import { Midi } from '@tonejs/midi';
 import { apiClient } from '../client/api';
 import { LessonPlayer } from '../components/LessonPlayer';
 import { normalizeLesson, type LessonData } from '../lib/lesson';
+
+const NOTE_NAMES_FLAT = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B'];
+
+function midiPitchToNote(midi: number): string {
+  const octave = Math.floor(midi / 12) - 1;
+  return `${NOTE_NAMES_FLAT[midi % 12]}${octave}`;
+}
+
+async function parseMidiToLesson(file: File, title: string): Promise<LessonData> {
+  const buffer = await file.arrayBuffer();
+  const midi = new Midi(buffer);
+
+  const allNotes: Array<{ time: number; duration: number; midi: number }> = [];
+  for (const track of midi.tracks) {
+    for (const note of track.notes) {
+      allNotes.push({ time: note.time, duration: note.duration, midi: note.midi });
+    }
+  }
+  allNotes.sort((a, b) => a.time - b.time);
+
+  if (!allNotes.length) throw new Error('MIDI файл не содержит нот');
+
+  return {
+    version: 1,
+    title: title || file.name.replace(/\.mid$/i, ''),
+    confidence: 'medium',
+    warnings: ['Загружено из MIDI — добавьте слоги вручную'],
+    steps: allNotes.map(n => ({
+      part: '',
+      beat: 0,
+      swara: '',
+      note: midiPitchToNote(n.midi),
+      lyric: '',
+      duration: Math.max(80, Math.round(n.duration * 1000)),
+      wordBreak: false,
+    })),
+  };
+}
 
 const cleanWord = (w: string) => w.toLowerCase().replace(/[.,!?;:""«»\-–—]/g, '').trim();
 const isCyrillic = (s: string) => /[а-яёА-ЯЁ]/.test(s);
@@ -351,6 +390,27 @@ function DictionaryFillSection() {
               />
             </label>
 
+            <label style={{ display: 'grid', gap: 6, fontSize: 13, color: '#555' }}>
+              MIDI файл (.mid)
+              <input
+                type="file"
+                accept=".mid,.midi"
+                onChange={async event => {
+                  const file = event.target.files?.[0] ?? null;
+                  if (!file) return;
+                  try {
+                    setLessonStatus('Парсим MIDI...');
+                    const parsed = await parseMidiToLesson(file, selectedBhajan?.title || '');
+                    setLesson(parsed);
+                    setLessonText(JSON.stringify(parsed, null, 2));
+                    setLessonStatus(`MIDI загружен: ${parsed.steps.length} нот. Добавьте слоги и сохраните.`);
+                  } catch (err: any) {
+                    setLessonStatus(err?.message ?? 'Ошибка парсинга MIDI');
+                  }
+                }}
+                style={{ border: '1px solid #ddd', borderRadius: 8, padding: 9, fontSize: 14, background: '#fff' }}
+              />
+            </label>
             <label style={{ display: 'grid', gap: 6, fontSize: 13, color: '#555' }}>
               Готовый lesson JSON
               <input
