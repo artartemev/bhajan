@@ -124,7 +124,6 @@ def write_midi(events: list[tuple[float, float, int]], output_path: Path, title:
     mid.tracks.append(track)
 
     track.append(mido.MetaMessage('set_tempo', tempo=MIDI_TEMPO, time=0))
-    track.append(mido.MetaMessage('track_name', name=title, time=0))
 
     # Build flat list of (tick, type, pitch)
     messages = []
