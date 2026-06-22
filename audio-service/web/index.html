@@ -113,9 +113,11 @@
           const stems = Object.entries(r.stems || {}).map(([k, v]) => fileLink(j.id, v)).join(' ');
           const midi = Object.entries(r.midi || {}).map(([k, v]) => fileLink(j.id, v)).join(' ');
           const chords = (r.chords || []).map(c => c.label).join(' → ');
+          const warns = (r.warnings || []).map(w => `<div>⚠️ ${w}</div>`).join('');
           body = `<div class="files"><b>Стемы:</b> ${stems || '—'}</div>
                   <div class="files"><b>MIDI:</b> ${midi || '—'}</div>
-                  <div class="chords"><b>Аккорды:</b> <code>${chords || '—'}</code></div>`;
+                  <div class="chords"><b>Аккорды:</b> <code>${chords || '—'}</code></div>
+                  ${warns ? `<div class="chords">${warns}</div>` : ''}`;
         }
         return `<div class="job">
           <div><b>${j.title || j.id}</b> <span class="badge">${j.source_type || ''}</span></div>

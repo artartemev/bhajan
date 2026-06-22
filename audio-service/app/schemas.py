@@ -38,6 +38,7 @@ class JobResult(BaseModel):
     chords_file: Optional[str] = None
     chords: list[ChordSpan] = Field(default_factory=list)
     stub: bool = False
+    warnings: list[str] = Field(default_factory=list)
 
 
 class JobView(BaseModel):
@@ -48,4 +49,5 @@ class JobView(BaseModel):
     source_type: Optional[str] = None
     source_ref: Optional[str] = None
     error: Optional[str] = None
+    warnings: list[str] = Field(default_factory=list)
     result: Optional[JobResult] = None
