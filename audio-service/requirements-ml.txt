@@ -1,0 +1,10 @@
+# Тяжёлые ML-зависимости. Ставятся поверх requirements.txt для реального режима.
+# Требуют ffmpeg в системе (для yt-dlp и чтения mp3).
+demucs>=4.0          # разделение на стемы (vocals/drums/bass/other)
+librosa>=0.10        # pyin — монофоническая транскрипция вокала
+soundfile>=0.12      # чтение/запись wav
+scipy>=1.11          # band-pass для фисгармони
+basic-pitch>=0.3     # полифоническая транскрипция фисгармони (Spotify)
+madmom>=0.16.1       # распознавание аккордов (DeepChroma + CRF)
+yt-dlp>=2024.0       # скачивание звука с YouTube
+numpy>=1.24

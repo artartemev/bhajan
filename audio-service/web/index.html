@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Kirtan Audio Service</title>
+  <style>
+    :root { --bg:#faf8f4; --fg:#2b2b2b; --muted:#8a8378; --accent:#b4682a; --card:#fff; }
+    * { box-sizing: border-box; }
+    body { margin:0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+           background:var(--bg); color:var(--fg); line-height:1.5; }
+    .wrap { max-width:760px; margin:0 auto; padding:32px 20px 80px; }
+    h1 { font-weight:600; letter-spacing:-0.01em; margin:0 0 4px; }
+    .sub { color:var(--muted); margin:0 0 28px; }
+    .card { background:var(--card); border:1px solid #ece7df; border-radius:14px; padding:20px; margin-bottom:18px; }
+    label { display:block; font-size:13px; color:var(--muted); margin:0 0 6px; }
+    input[type=text], input[type=file] { width:100%; padding:10px 12px; border:1px solid #ddd6cb;
+           border-radius:10px; background:#fff; font-size:15px; }
+    .row { margin-bottom:14px; }
+    .or { text-align:center; color:var(--muted); font-size:13px; margin:8px 0; }
+    button { background:var(--accent); color:#fff; border:none; border-radius:10px; padding:11px 18px;
+             font-size:15px; cursor:pointer; }
+    button:disabled { opacity:.5; cursor:default; }
+    .badge { display:inline-block; font-size:12px; padding:2px 8px; border-radius:999px; background:#efe9df; color:#6b6359; }
+    .job { border-top:1px solid #efeae1; padding:14px 0; }
+    .job:first-child { border-top:none; }
+    .status { font-size:13px; color:var(--accent); font-weight:600; }
+    .bar { height:6px; background:#efe9df; border-radius:6px; overflow:hidden; margin:8px 0; }
+    .bar > i { display:block; height:100%; background:var(--accent); transition:width .4s; }
+    a { color:var(--accent); }
+    .files a { display:inline-block; margin-right:14px; font-size:14px; }
+    .chords { font-size:13px; color:var(--muted); margin-top:6px; word-break:break-word; }
+    code { background:#f1ece3; padding:1px 5px; border-radius:5px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Kirtan Audio Service</h1>
+    <p class="sub">MP3 или ссылка на YouTube → вокал и фисгармонь → MIDI и аккорды.</p>
+    <span class="badge" id="mode">…</span>
+
+    <div class="card">
+      <div class="row">
+        <label>Ссылка на YouTube</label>
+        <input type="text" id="url" placeholder="https://youtube.com/watch?v=..." />
+      </div>
+      <div class="or">— или —</div>
+      <div class="row">
+        <label>Загрузить MP3 / WAV</label>
+        <input type="file" id="file" accept="audio/*" />
+      </div>
+      <div class="row">
+        <label>Название (необязательно)</label>
+        <input type="text" id="title" placeholder="Например: Шри Рам" />
+      </div>
+      <button id="go">Обработать</button>
+    </div>
+
+    <h3>Задачи</h3>
+    <div class="card" id="jobs"><p class="sub">Пока пусто.</p></div>
+  </div>
+
+  <script>
+    const api = (p) => `/api${p}`;
+
+    async function refreshMode() {
+      try {
+        const h = await (await fetch(api('/health'))).json();
+        const el = document.getElementById('mode');
+        el.textContent = h.stub_mode ? 'stub-режим (ML не установлен)' : 'ML-режим';
+      } catch (_) {}
+    }
+
+    document.getElementById('go').addEventListener('click', async () => {
+      const url = document.getElementById('url').value.trim();
+      const file = document.getElementById('file').files[0];
+      const title = document.getElementById('title').value.trim();
+      if (!url && !file) { alert('Укажите ссылку или файл'); return; }
+
+      const fd = new FormData();
+      if (title) fd.append('title', title);
+      if (url) fd.append('youtube_url', url);
+      if (file) fd.append('file', file);
+
+      const btn = document.getElementById('go');
+      btn.disabled = true; btn.textContent = 'Отправляю…';
+      try {
+        const res = await fetch(api('/jobs'), { method: 'POST', body: fd });
+        if (!res.ok) { alert('Ошибка: ' + (await res.text())); return; }
+        document.getElementById('url').value = '';
+        document.getElementById('file').value = '';
+        await renderJobs();
+      } finally {
+        btn.disabled = false; btn.textContent = 'Обработать';
+      }
+    });
+
+    function fileLink(id, name) {
+      return `<a href="${api('/jobs/' + id + '/files/' + encodeURIComponent(name))}" target="_blank">${name}</a>`;
+    }
+
+    async function renderJobs() {
+      const jobs = await (await fetch(api('/jobs'))).json();
+      const box = document.getElementById('jobs');
+      if (!jobs.length) { box.innerHTML = '<p class="sub">Пока пусто.</p>'; return; }
+      box.innerHTML = jobs.map(j => {
+        const pct = Math.round((j.progress || 0) * 100);
+        let body = '';
+        if (j.status === 'error') {
+          body = `<div class="chords">Ошибка: ${(j.error || '').split('\n')[0]}</div>`;
+        } else if (j.status === 'done' && j.result) {
+          const r = j.result;
+          const stems = Object.entries(r.stems || {}).map(([k, v]) => fileLink(j.id, v)).join(' ');
+          const midi = Object.entries(r.midi || {}).map(([k, v]) => fileLink(j.id, v)).join(' ');
+          const chords = (r.chords || []).map(c => c.label).join(' → ');
+          body = `<div class="files"><b>Стемы:</b> ${stems || '—'}</div>
+                  <div class="files"><b>MIDI:</b> ${midi || '—'}</div>
+                  <div class="chords"><b>Аккорды:</b> <code>${chords || '—'}</code></div>`;
+        }
+        return `<div class="job">
+          <div><b>${j.title || j.id}</b> <span class="badge">${j.source_type || ''}</span></div>
+          <div class="status">${j.status} · ${pct}%</div>
+          <div class="bar"><i style="width:${pct}%"></i></div>
+          ${body}
+        </div>`;
+      }).join('');
+    }
+
+    refreshMode();
+    renderJobs();
+    setInterval(renderJobs, 2000);
+  </script>
+</body>
+</html>

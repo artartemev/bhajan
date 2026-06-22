@@ -1,0 +1,9 @@
+# Ядро сервиса (лёгкое, запускает API в stub-режиме без ML)
+fastapi>=0.110
+uvicorn[standard]>=0.27
+python-multipart>=0.0.9
+pydantic>=2.6
+mido>=1.3            # запись MIDI (pure-Python, нужна и в stub-режиме)
+# Очередь (нужна только при QUEUE_BACKEND=rq)
+redis>=5.0
+rq>=1.16
