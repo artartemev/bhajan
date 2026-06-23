@@ -53,6 +53,45 @@ def _normalize(s: str) -> str:
     return s
 
 
+# Романизированные схемы — их транслитерировать не нужно
+_ROMAN_SCHEMES = {
+    "iast", "hk", "itrans", "slp1", "velthuis", "optitrans",
+    "kolkata", "wx", "titus", "iso", "latin", "roman",
+}
+
+
+def _romanize(text: str) -> str:
+    """Приводит индийское письмо (деванагари/бенгали/…) к латинице (IAST).
+
+    Нужно, чтобы сравнивать вывод Whisper (часто в деванагари) с романизированным
+    текстом пользователя. Если indic-transliteration не установлен или текст уже
+    латиницей — возвращаем как есть.
+    """
+    try:
+        from indic_transliteration import sanscript
+        from indic_transliteration.detect import detect
+    except ImportError:
+        return text
+    try:
+        scheme = detect(text)
+    except Exception:
+        return text
+    if not scheme:
+        return text
+    src = scheme.lower() if isinstance(scheme, str) else scheme
+    if src in _ROMAN_SCHEMES:
+        return text
+    try:
+        return sanscript.transliterate(text, src, sanscript.IAST)
+    except Exception:
+        return text
+
+
+def _match_key(s: str) -> str:
+    """Ключ для сравнения: романизация + нормализация (кросс-скрипт устойчиво)."""
+    return _normalize(_romanize(s))
+
+
 def _is_structural(line: str) -> bool:
     """Строки вида [Припев], (Mantra ×4) — структурные, не выравниваем."""
     return bool(re.match(r"^[\[\(].+[\]\)]$", line.strip()))
@@ -177,7 +216,7 @@ def _match_lines_to_words(lines: list[str], words: list[dict]) -> list[LyricLine
     if not words:
         return [LyricLine(text=line) for line in lines]
 
-    word_texts_norm = [_normalize(w["text"]) for w in words]
+    word_texts_norm = [_match_key(w["text"]) for w in words]
     cursor = 0
     result: list[LyricLine] = []
 
@@ -186,7 +225,7 @@ def _match_lines_to_words(lines: list[str], words: list[dict]) -> list[LyricLine
             result.append(LyricLine(text=line))
             continue
 
-        line_norm = _normalize(line)
+        line_norm = _match_key(line)
         if not line_norm:
             result.append(LyricLine(text=line))
             continue
@@ -235,16 +274,16 @@ def _match_lines_to_words(lines: list[str], words: list[dict]) -> list[LyricLine
 def _match_segments_to_lines(segments: list[dict], lines: list[str]) -> list[LyricTimeline]:
     """Каждый сегмент Whisper → ближайшая строка текста. Возвращает таймлайн с повторами."""
     candidates = [
-        (i, _normalize(text))
+        (i, _match_key(text))
         for i, text in enumerate(lines)
-        if not _is_structural(text) and _normalize(text)
+        if not _is_structural(text) and _match_key(text)
     ]
     if not candidates or not segments:
         return []
 
     timeline: list[LyricTimeline] = []
     for seg in segments:
-        seg_norm = _normalize(seg["text"])
+        seg_norm = _match_key(seg["text"])
         if not seg_norm:
             continue
         best_ratio, best_idx = 0.0, None

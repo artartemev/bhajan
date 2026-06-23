@@ -91,3 +91,18 @@ def test_segments_ignore_unmatched():
     segments = [{"text": "completely unrelated noise", "start": 0.0, "end": 1.0}]
     tl = align._match_segments_to_lines(segments, lines)
     assert tl == []
+
+
+def test_romanize_passthrough_without_lib():
+    # на латинице транслитерация ничего не меняет (и не требует библиотеки)
+    assert align._match_key("āmāra jīvana") == "amara jivana"
+
+
+def test_cross_script_match():
+    # Деванагари из Whisper ↔ романизированный текст пользователя
+    pytest = __import__("pytest")
+    pytest.importorskip("indic_transliteration")
+    lines = ["āmāra jīvana sadā pāpe rata"]
+    segments = [{"text": "आमार जीवन सदा पापे रत", "start": 0.0, "end": 2.0}]
+    tl = align._match_segments_to_lines(segments, lines)
+    assert len(tl) == 1 and tl[0].line == 0

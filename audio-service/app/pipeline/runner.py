@@ -129,6 +129,12 @@ def _run(job_id: str) -> None:
         # привязываем аккорды к строкам и к фрагментам таймлайна
         lyrics_lines = align_mod.attach_chords(lyrics_lines, chord_spans)
         lyrics_timeline = align_mod.attach_chords_to_timeline(lyrics_timeline, chord_spans)
+        if not stub and not lyrics_timeline:
+            warnings.append(
+                "Выравнивание текста: совпадений не найдено. Проверьте ASR_LANGUAGE "
+                "(для этой песни — bn) и установите indic-transliteration, если текст "
+                "латиницей, а Whisper распознаёт деванагари/бенгали."
+            )
         lyrics_path = d / "lyrics.json"
         lyrics_path.write_text(
             json.dumps({
