@@ -32,8 +32,9 @@ def separate(input_path: Path, out_dir: Path, *, model: str, harmonium_stem: str
     """Разделяет дорожки через Python-API Demucs. Возвращает {имя_дорожки: путь_к_wav}.
 
     Аудио читаем через librosa, стемы пишем через soundfile — так не задействуется
-    torchaudio.save/load (который в новых версиях требует torchcodec). Имена в
-    результате нормализованы: vocals, harmonium, drums, bass, other.
+    torchaudio.save/load (который в новых версиях требует torchcodec). Наружу
+    отдаём три дорожки: vocals, instrumental (сумма не-вокальных источников) и
+    harmonium (источник harmonium_stem с band-pass).
     """
     import numpy as np
     import soundfile as sf
@@ -67,16 +68,33 @@ def separate(input_path: Path, out_dir: Path, *, model: str, harmonium_stem: str
 
     stem_root = out_dir / model / input_path.stem
     stem_root.mkdir(parents=True, exist_ok=True)
-    stems: dict[str, Path] = {}
-    for name, source in zip(mdl.sources, out):
-        arr = source.cpu().numpy().T  # (samples, channels) для soundfile
-        path = stem_root / f"{name}.wav"
-        sf.write(str(path), arr, sr)
-        stems[name] = path
 
-    if harmonium_stem in stems:
+    # отдаём наружу только три дорожки: вокал, инструментал, фисгармонь.
+    # остальные источники Demucs (drums/bass/other) суммируем в «instrumental».
+    raw: dict[str, "np.ndarray"] = {name: source.cpu().numpy().T for name, source in zip(mdl.sources, out)}
+
+    stems: dict[str, Path] = {}
+    if "vocals" in raw:
+        vocals_path = stem_root / "vocals.wav"
+        sf.write(str(vocals_path), raw["vocals"], sr)
+        stems["vocals"] = vocals_path
+
+    accomp = None
+    for name, arr in raw.items():
+        if name == "vocals":
+            continue
+        accomp = arr.copy() if accomp is None else accomp + arr
+    if accomp is not None:
+        inst_path = stem_root / "instrumental.wav"
+        sf.write(str(inst_path), accomp, sr)
+        stems["instrumental"] = inst_path
+
+    # фисгармонь — из источника harmonium_stem (обычно "other") с band-pass
+    if harmonium_stem in raw:
+        src_path = stem_root / f"_{harmonium_stem}.wav"
+        sf.write(str(src_path), raw[harmonium_stem], sr)
         harmonium_out = stem_root / "harmonium.wav"
-        _emphasize_harmonium(stems[harmonium_stem], harmonium_out)
+        _emphasize_harmonium(src_path, harmonium_out)
         stems["harmonium"] = harmonium_out
 
     return stems
@@ -115,7 +133,7 @@ def stub_separate(input_path: Path, out_dir: Path, *, harmonium_stem: str) -> di
     stem_root = out_dir / "stub"
     stem_root.mkdir(parents=True, exist_ok=True)
     stems: dict[str, Path] = {}
-    for name in ("vocals", "harmonium"):
+    for name in ("vocals", "instrumental", "harmonium"):
         dst = stem_root / f"{name}.wav"
         shutil.copyfile(input_path, dst)
         stems[name] = dst

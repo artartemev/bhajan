@@ -36,24 +36,14 @@
     .chords { font-size:13px; color:var(--muted); margin-top:6px; word-break:break-word; }
     code { background:#f1ece3; padding:1px 5px; border-radius:5px; }
 
-    /* Караоке-плеер */
-    .player { margin-top:14px; padding:14px; background:#fbf6ee; border-radius:10px; }
-    .player audio { width:100%; margin-bottom:10px; }
-    .lyrics { max-height:340px; overflow-y:auto; }
-    .lyric-line {
-      padding:6px 10px; border-radius:6px; cursor:pointer;
-      font-size:16px; line-height:1.45;
-      transition:background .25s, color .2s, transform .2s;
-    }
-    .lyric-line.unaligned { color:#a8a195; }
-    .lyric-line.interp { color:#7d756a; }  /* тайминг интерполирован (Whisper не распознал) */
-    .lyric-line.current { background:var(--hi); color:var(--accent); font-weight:600; transform:translateX(4px); }
-    .lyric-line.structural { color:var(--muted); font-style:italic; padding-top:10px; }
-    .lyric-line .lyric-text { line-height:2.4; }
-    .word { position:relative; display:inline-block; padding-top:2px; }
+    /* Аккордовый лист */
+    .sheet { margin-top:14px; padding:16px; background:#fbf6ee; border-radius:10px; max-height:520px; overflow-y:auto; }
+    .sheet-line { margin:2px 0 12px; }
+    .sheet-line.structural { color:var(--muted); font-style:italic; margin-top:14px; }
+    .word { display:inline-block; vertical-align:bottom; white-space:pre; font-size:16px; line-height:1.3; }
     .wchord {
-      position:absolute; top:-15px; left:0; white-space:nowrap;
-      font-size:11px; font-weight:700; color:var(--accent);
+      display:block; min-height:1.25em; white-space:pre;
+      font-size:12px; font-weight:700; color:var(--accent);
     }
     .chords-full { font-size:12px; color:var(--muted); }
     .chords-full details summary { cursor:pointer; color:var(--accent); }
@@ -62,7 +52,7 @@
 <body>
   <div class="wrap">
     <h1>Kirtan Audio Service</h1>
-    <p class="sub">MP3 или ссылка на YouTube → вокал и фисгармонь → MIDI, аккорды, синхронизированный текст.</p>
+    <p class="sub">MP3 или ссылка на YouTube → вокал / инструментал / фисгармонь → MIDI и аккордовый лист.</p>
     <span class="badge" id="mode">…</span>
 
     <div class="card">
@@ -147,40 +137,23 @@
     }
 
     // Текущий аккорд для момента времени t (двоичный поиск был бы лучше, но строк мало)
-    function chordAt(chords, t) {
-      for (const c of chords) if (t >= c.start && t < c.end) return c.label;
-      return null;
+    // Статический аккордовый лист: текст со стоящими над ним аккордами (без караоке)
+    function renderSheet(job) {
+      const lines = job.result.lyrics_lines || [];
+      const linesHtml = lines.map((l) => {
+        const structural = /^[\[\(].+[\]\)]$/.test((l.text || '').trim());
+        return `<div class="sheet-line${structural ? ' structural' : ''}">${renderWords(l)}</div>`;
+      }).join('');
+      return `<div class="sheet">${linesHtml}</div>`;
     }
 
-    window.__timeline = window.__timeline || {};
-
-    function renderPlayer(job) {
-      const r = job.result;
-      window.__timeline[job.id] = r.lyrics_timeline || [];
-      const audioName = (r.stems && (r.stems.vocals || Object.values(r.stems)[0])) || 'stems/vocals.wav';
-      const audioId = `audio-${job.id}`;
-      const lyricsId = `lyrics-${job.id}`;
-      const lines = r.lyrics_lines || [];
-
-      const linesHtml = lines.map((l, i) => {
-        const cls = ['lyric-line'];
-        if (l.start === null || l.start === undefined) cls.push('unaligned');
-        else if (l.interpolated) cls.push('interp');
-        if (/^[\[\(].+[\]\)]$/.test(l.text.trim())) cls.push('structural');
-        const dataStart = l.start !== null && l.start !== undefined ? l.start : '';
-        const dataEnd = l.end !== null && l.end !== undefined ? l.end : '';
-        return `<div class="${cls.join(' ')}" data-i="${i}" data-start="${dataStart}" data-end="${dataEnd}">
-          <div class="lyric-text">${renderWords(l)}</div>
-        </div>`;
-      }).join('');
-
-      // оригинал source.mp3, при ошибке — стем вокала
-      return `<div class="player">
-        <audio id="${audioId}" controls preload="metadata"
-          src="${fileUrl(job.id, 'source.mp3')}"
-          onerror="if(!this.dataset.fb){this.dataset.fb=1;this.src='${fileUrl(job.id, audioName)}';}"></audio>
-        <div class="lyrics" id="${lyricsId}">${linesHtml}</div>
-      </div>`;
+    // 'A:maj' → 'A', 'E:min' → 'Em' (стандартная запись)
+    function prettyChord(label) {
+      if (!label) return '';
+      const [root, qual] = label.split(':');
+      if (qual === undefined || qual === 'maj') return root;
+      if (qual === 'min') return root + 'm';
+      return root + qual;
     }
 
     function chordsSummary(labels) {
@@ -197,61 +170,18 @@
       return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
     }
 
-    // Пословный рендер с аккордами над словами (как в табах)
+    // Пословный рендер: каждое слово — колонка (аккорд сверху, слово снизу).
+    // inline-block → аккорды не наезжают друг на друга.
     function renderWords(line) {
       const words = line.words || [];
       const hasAnyChord = words.some(w => w.chords && w.chords.length);
       if (!words.length || !hasAnyChord) {
-        // нет пословной раскладки — показываем простой текст
-        return escapeHtml(line.text);
+        return escapeHtml(line.text);  // нет раскладки — простой текст
       }
       return words.map(w => {
-        const ch = (w.chords && w.chords.length)
-          ? `<span class="wchord">${w.chords.map(escapeHtml).join(' ')}</span>` : '';
-        return `<span class="word">${ch}${escapeHtml(w.text)}</span>`;
-      }).join(' ');
-    }
-
-    function wireUpPlayer(job) {
-      const r = job.result;
-      const audio = document.getElementById(`audio-${job.id}`);
-      const container = document.getElementById(`lyrics-${job.id}`);
-      if (!audio || !container) return;
-      const lines = Array.from(container.querySelectorAll('.lyric-line'));
-
-      // клик по строке → перемотка
-      lines.forEach(el => {
-        el.addEventListener('click', () => {
-          const s = parseFloat(el.dataset.start);
-          if (!isNaN(s)) { audio.currentTime = s; audio.play(); }
-        });
-      });
-
-      // подсветка по ТАЙМЛАЙНУ (с повторами): находим фрагмент, накрывающий t,
-      // и подсвечиваем строку с его индексом
-      const timeline = (window.__timeline[job.id] || [])
-        .filter(e => e.start != null && e.end != null)
-        .sort((a, b) => a.start - b.start);
-
-      audio.addEventListener('timeupdate', () => {
-        const t = audio.currentTime;
-        let activeLine = -1;
-        for (const e of timeline) {
-          if (t >= e.start && t < e.end) { activeLine = e.line; break; }
-          if (e.start > t) break;
-        }
-        lines.forEach((el) => el.classList.toggle('current', parseInt(el.dataset.i, 10) === activeLine));
-        if (activeLine >= 0) {
-          const el = lines.find(x => parseInt(x.dataset.i, 10) === activeLine);
-          if (el) {
-            const cRect = container.getBoundingClientRect();
-            const eRect = el.getBoundingClientRect();
-            if (eRect.top < cRect.top + 20 || eRect.bottom > cRect.bottom - 20) {
-              container.scrollTo({ top: el.offsetTop - container.clientHeight/2 + el.clientHeight/2, behavior: 'smooth' });
-            }
-          }
-        }
-      });
+        const chords = (w.chords || []).map(prettyChord).join(' ');
+        return `<span class="word"><span class="wchord">${escapeHtml(chords)}</span>${escapeHtml(w.text)} </span>`;
+      }).join('');
     }
 
     let lastJobsSig = '';
@@ -274,7 +204,7 @@
           const r = j.result;
           const stems = Object.entries(r.stems || {}).map(([k, v]) => fileLink(j.id, v)).join(' ');
           const midi = Object.entries(r.midi || {}).map(([k, v]) => fileLink(j.id, v)).join(' ');
-          const labels = (r.chords || []).map(c => c.label);
+          const labels = (r.chords || []).map(c => prettyChord(c.label));
           const warns = (r.warnings || []).map(w => `<div>⚠️ ${escapeHtml(w)}</div>`).join('');
           const hasLyrics = (r.lyrics_lines || []).length > 0;
           const keyStr = r.key ? `<b>Тональность:</b> <code>${escapeHtml(r.key)}</code> · ` : '';
@@ -282,7 +212,7 @@
                   <div class="files"><b>MIDI:</b> ${midi || '—'}</div>
                   <div class="chords">${keyStr}<b>Аккорды (${labels.length}):</b> ${chordsSummary(labels)}</div>
                   ${warns ? `<div class="chords">${warns}</div>` : ''}
-                  ${hasLyrics ? renderPlayer(j) : ''}`;
+                  ${hasLyrics ? renderSheet(j) : ''}`;
         }
         return `<div class="job">
           <div><b>${escapeHtml(j.title || j.id)}</b> <span class="badge">${j.source_type || ''}</span></div>
@@ -291,10 +221,6 @@
           ${body}
         </div>`;
       }).join('');
-
-      // подцепляем обработчики плеера для каждой завершённой задачи с текстом
-      jobs.filter(j => j.status === 'done' && j.result && (j.result.lyrics_lines || []).length)
-        .forEach(j => wireUpPlayer(j));
     }
 
     refreshMode();
