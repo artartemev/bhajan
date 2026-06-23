@@ -11,38 +11,72 @@
 """
 from __future__ import annotations
 
-import subprocess
-import sys
 from pathlib import Path
 
 # Диапазон фисгармони (язычковый орган): основной тон + значимые гармоники.
 HARMONIUM_BAND_HZ = (90.0, 6000.0)
 
 
-def _demucs_stem_dir(out_dir: Path, model: str, stem_name: str) -> Path:
-    return out_dir / model / stem_name
+def _pick_device():
+    import torch
+
+    if torch.cuda.is_available():
+        return "cuda"
+    mps = getattr(torch.backends, "mps", None)
+    if mps is not None and mps.is_available():
+        return "mps"
+    return "cpu"
 
 
 def separate(input_path: Path, out_dir: Path, *, model: str, harmonium_stem: str) -> dict[str, Path]:
-    """Запускает Demucs и возвращает {имя_дорожки: путь_к_wav}.
+    """Разделяет дорожки через Python-API Demucs. Возвращает {имя_дорожки: путь_к_wav}.
 
-    Имена в результате нормализованы: vocals, harmonium, drums, bass, other.
+    Аудио читаем через librosa, стемы пишем через soundfile — так не задействуется
+    torchaudio.save/load (который в новых версиях требует torchcodec). Имена в
+    результате нормализованы: vocals, harmonium, drums, bass, other.
     """
-    out_dir.mkdir(parents=True, exist_ok=True)
-    subprocess.run(
-        [sys.executable, "-m", "demucs", "-n", model, "-o", str(out_dir), str(input_path)],
-        check=True,
-    )
-    stem_root = _demucs_stem_dir(out_dir, model, input_path.stem)
+    import numpy as np
+    import soundfile as sf
+    import torch
+    from demucs.apply import apply_model
+    from demucs.pretrained import get_model
 
+    import librosa
+
+    out_dir.mkdir(parents=True, exist_ok=True)
+    mdl = get_model(model)
+    mdl.eval()
+    device = _pick_device()
+
+    sr = mdl.samplerate
+    channels = mdl.audio_channels
+    wav, _ = librosa.load(str(input_path), sr=sr, mono=(channels == 1))
+    wav = np.asarray(wav, dtype=np.float32)
+    if wav.ndim == 1:
+        wav = np.tile(wav[None, :], (channels, 1))
+    elif wav.shape[0] != channels:
+        wav = wav[:channels] if wav.shape[0] > channels else np.tile(wav[:1], (channels, 1))
+
+    mix = torch.from_numpy(wav)
+    ref = mix.mean(0)
+    std = ref.std() + 1e-8
+    mix_norm = (mix - ref.mean()) / std
+    with torch.no_grad():
+        out = apply_model(mdl, mix_norm[None], device=device, progress=False)[0]
+    out = out * std + ref.mean()
+
+    stem_root = out_dir / model / input_path.stem
+    stem_root.mkdir(parents=True, exist_ok=True)
     stems: dict[str, Path] = {}
-    for wav in stem_root.glob("*.wav"):
-        stems[wav.stem] = wav
+    for name, source in zip(mdl.sources, out):
+        arr = source.cpu().numpy().T  # (samples, channels) для soundfile
+        path = stem_root / f"{name}.wav"
+        sf.write(str(path), arr, sr)
+        stems[name] = path
 
     if harmonium_stem in stems:
-        harmonium_src = stems[harmonium_stem]
         harmonium_out = stem_root / "harmonium.wav"
-        _emphasize_harmonium(harmonium_src, harmonium_out)
+        _emphasize_harmonium(stems[harmonium_stem], harmonium_out)
         stems["harmonium"] = harmonium_out
 
     return stems
