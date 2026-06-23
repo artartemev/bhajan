@@ -72,15 +72,18 @@ def _run(job_id: str) -> None:
 
     if "vocals" in stems:
         _stage(
-            "Транскрипция вокала (librosa)",
-            real=lambda: transcribe.vocals_to_midi(stems["vocals"], vocals_mid),
+            "Транскрипция вокала",
+            tiers=[("librosa pyin", lambda: transcribe.vocals_to_midi(stems["vocals"], vocals_mid))],
             stub=lambda: transcribe.stub_to_midi(vocals_mid, polyphonic=False),
             use_stub=stub, warnings=warnings,
         )
     if "harmonium" in stems:
         _stage(
-            "Транскрипция фисгармони (Basic Pitch)",
-            real=lambda: transcribe.harmonium_to_midi(stems["harmonium"], harmonium_mid),
+            "Транскрипция фисгармони",
+            tiers=[
+                ("Basic Pitch", lambda: transcribe.harmonium_to_midi(stems["harmonium"], harmonium_mid)),
+                ("librosa CQT", lambda: transcribe.harmonium_to_midi_librosa(stems["harmonium"], harmonium_mid)),
+            ],
             stub=lambda: transcribe.stub_to_midi(harmonium_mid, polyphonic=True),
             use_stub=stub, warnings=warnings,
         )
@@ -93,8 +96,11 @@ def _run(job_id: str) -> None:
     storage.update_job(job_id, status=JobStatus.chords, progress=0.8)
     chord_source = stems.get("harmonium", source)
     chord_spans = _stage(
-        "Аккорды (madmom)",
-        real=lambda: chords_mod.detect_chords(chord_source),
+        "Аккорды",
+        tiers=[
+            ("madmom", lambda: chords_mod.detect_chords(chord_source)),
+            ("librosa", lambda: chords_mod.detect_chords_librosa(chord_source)),
+        ],
         stub=chords_mod.stub_chords,
         use_stub=stub, warnings=warnings,
     ) or []
@@ -121,15 +127,21 @@ def _warn(stage: str, exc: Exception, fallback: str) -> str:
     return f"{stage}: {type(exc).__name__}: {exc} → запасной вариант ({fallback})"
 
 
-def _stage(name, *, real, stub, use_stub: bool, warnings: list[str]):
-    """Выполняет реальный шаг; при stub-режиме или ошибке/отсутствии ML — запасной."""
+def _stage(name, *, tiers, stub, use_stub: bool, warnings: list[str]):
+    """Пробует методы по очереди (топовый → облегчённый); иначе заглушка.
+
+    tiers — список (имя_метода, функция). Первый успешный результат возвращается.
+    Каждый неудавшийся метод оставляет предупреждение.
+    """
     if use_stub:
         return stub()
-    try:
-        return real()
-    except Exception as exc:  # noqa: BLE001 — ловим ImportError и сбои моделей
-        warnings.append(_warn(name, exc, "демо-результат"))
-        return stub()
+    for tier_name, fn in tiers:
+        try:
+            return fn()
+        except Exception as exc:  # noqa: BLE001 — ловим ImportError и сбои моделей
+            warnings.append(_warn(f"{name} / {tier_name}", exc, "пробую запасной метод"))
+    warnings.append(f"{name}: ни один метод недоступен → демо-результат")
+    return stub()
 
 
 def _rel(base: Path, p: Path) -> str:

@@ -75,6 +75,60 @@ def harmonium_to_midi(audio_path: Path, output_path: Path) -> int:
     return len(events)
 
 
+def harmonium_to_midi_librosa(audio_path: Path, output_path: Path) -> int:
+    """Облегчённая полифоническая транскрипция фисгармони через CQT librosa.
+
+    Без TensorFlow/Basic Pitch (работает на Python 3.13). Грубее, чем Basic Pitch:
+    берём CQT в диапазоне фисгармони, по каждому кадру оставляем локальные пики
+    спектра выше относительного порога (до 6 одновременных нот) и склеиваем их в
+    ноты по непрерывности во времени.
+    """
+    import librosa
+    import numpy as np
+
+    y, sr = librosa.load(str(audio_path), mono=True)
+    hop = 512
+    n_bins = 60  # 5 октав по 12 полутонов, начиная с C2
+    fmin = librosa.note_to_hz("C2")
+    midi_base = int(round(librosa.note_to_midi("C2")))
+    cqt = np.abs(librosa.cqt(y, sr=sr, fmin=fmin, n_bins=n_bins, bins_per_octave=12, hop_length=hop))
+    times = librosa.times_like(cqt, sr=sr, hop_length=hop)
+    frame_dur = hop / sr
+
+    events: list[tuple[float, float, int]] = []
+    ongoing: dict[int, int] = {}  # bin -> стартовый кадр
+    n_frames = cqt.shape[1]
+    for f in range(n_frames):
+        col = cqt[:, f]
+        peak = float(col.max())
+        thr = peak * 0.25
+        present: set[int] = set()
+        if peak > 0:
+            for b in range(1, n_bins - 1):
+                if col[b] >= thr and col[b] >= col[b - 1] and col[b] >= col[b + 1]:
+                    present.add(b)
+            if len(present) > 6:  # ограничиваем полифонию
+                present = set(sorted(present, key=lambda b: col[b], reverse=True)[:6])
+
+        for b in list(ongoing):
+            if b not in present:
+                start = times[ongoing.pop(b)]
+                end = times[f]
+                if end - start >= MIN_NOTE_DURATION_S:
+                    events.append((float(start), float(end), midi_base + b))
+        for b in present:
+            ongoing.setdefault(b, f)
+
+    for b, start_f in ongoing.items():
+        start = times[start_f]
+        end = times[-1] + frame_dur
+        if end - start >= MIN_NOTE_DURATION_S:
+            events.append((float(start), float(end), midi_base + b))
+
+    write_midi(events, output_path)
+    return len(events)
+
+
 def stub_to_midi(output_path: Path, *, polyphonic: bool) -> int:
     """Без ML: пишет короткую гамму/аккорды, чтобы файл MIDI существовал."""
     if polyphonic:
