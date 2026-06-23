@@ -86,6 +86,39 @@ def test_lines_first_occurrence():
     assert out[1].aligned and out[1].start == 2.0
 
 
+def test_fill_missing_lines_interpolates_between_anchors():
+    from app.schemas import LyricLine, LyricTimeline
+    # строки 0 и 2 распознаны, строка 1 — нет; интерполируем её между ними
+    lines = [
+        LyricLine(text="first", start=0.0, end=2.0, aligned=True),
+        LyricLine(text="middle"),                                   # пропущена Whisper
+        LyricLine(text="last", start=6.0, end=8.0, aligned=True),
+    ]
+    timeline = [
+        LyricTimeline(start=0.0, end=2.0, line=0),
+        LyricTimeline(start=6.0, end=8.0, line=2),
+    ]
+    out_lines, out_tl = align.fill_missing_lines(lines, timeline, audio_end=10.0)
+    mid = out_lines[1]
+    assert mid.start is not None and mid.interpolated
+    assert 2.0 <= mid.start < 6.0          # попала в промежуток между якорями
+    # в таймлайне появилась запись для строки 1 → будет подсветка
+    assert any(e.line == 1 for e in out_tl)
+
+
+def test_fill_missing_lines_trailing_uses_audio_end():
+    from app.schemas import LyricLine, LyricTimeline
+    lines = [
+        LyricLine(text="sung", start=0.0, end=2.0, aligned=True),
+        LyricLine(text="tail one"),
+        LyricLine(text="tail two"),
+    ]
+    timeline = [LyricTimeline(start=0.0, end=2.0, line=0)]
+    out_lines, _ = align.fill_missing_lines(lines, timeline, audio_end=8.0)
+    assert all(out_lines[i].start is not None for i in (1, 2))
+    assert out_lines[2].end <= 8.0 + 1e-6
+
+
 def test_segments_ignore_unmatched():
     lines = ["знакомая строка"]
     segments = [{"text": "completely unrelated noise", "start": 0.0, "end": 1.0}]

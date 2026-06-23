@@ -46,6 +46,7 @@
       transition:background .25s, color .2s, transform .2s;
     }
     .lyric-line.unaligned { color:#a8a195; }
+    .lyric-line.interp { color:#7d756a; }  /* тайминг интерполирован (Whisper не распознал) */
     .lyric-line.current { background:var(--hi); color:var(--accent); font-weight:600; transform:translateX(4px); }
     .lyric-line.structural { color:var(--muted); font-style:italic; padding-top:10px; }
     .lyric-line .lyric-text { line-height:2.4; }
@@ -163,7 +164,8 @@
 
       const linesHtml = lines.map((l, i) => {
         const cls = ['lyric-line'];
-        if (!l.aligned && (l.start === null || l.start === undefined)) cls.push('unaligned');
+        if (l.start === null || l.start === undefined) cls.push('unaligned');
+        else if (l.interpolated) cls.push('interp');
         if (/^[\[\(].+[\]\)]$/.test(l.text.trim())) cls.push('structural');
         const dataStart = l.start !== null && l.start !== undefined ? l.start : '';
         const dataEnd = l.end !== null && l.end !== undefined ? l.end : '';

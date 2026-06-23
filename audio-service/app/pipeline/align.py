@@ -120,6 +120,9 @@ def align_lyrics(
     segments = _whisper_segments(audio_path, language)
     timeline = _match_segments_to_lines(segments, lines)
     out_lines = _lines_with_first_occurrence(lines, timeline)
+    # текст известен целиком: строки, что Whisper не распознал, расставляем по времени
+    # между распознанными «якорями» — не теряем их
+    out_lines, timeline = fill_missing_lines(out_lines, timeline, _audio_duration(audio_path))
     return out_lines, timeline
 
 
@@ -322,6 +325,52 @@ def _lines_with_first_occurrence(lines: list[str], timeline: list[LyricTimeline]
         if not ln.aligned:
             ln.start, ln.end, ln.aligned = entry.start, entry.end, True
     return out
+
+
+def fill_missing_lines(
+    lines: list[LyricLine], timeline: list[LyricTimeline], audio_end: float,
+) -> tuple[list[LyricLine], list[LyricTimeline]]:
+    """Текст известен целиком — нераспознанные строки расставляем по времени между
+    распознанными «якорями» (равномерно в промежутке). Для них создаём записи
+    таймлайна, чтобы подсветка и аккорды работали. Помечаем interpolated=True."""
+    real_idx = [i for i, l in enumerate(lines) if not _is_structural(l.text)]
+    anchors = [
+        (i, lines[i].start, lines[i].end)
+        for i in real_idx
+        if lines[i].aligned and lines[i].start is not None
+    ]
+    if not anchors:
+        return lines, timeline  # совсем нет опор — нечего интерполировать
+
+    new_entries: list[LyricTimeline] = []
+
+    def place(indices: list[int], t0: float, t1: float) -> None:
+        if not indices or t1 <= t0:
+            return
+        slot = (t1 - t0) / len(indices)
+        for k, i in enumerate(indices):
+            s, e = t0 + k * slot, t0 + (k + 1) * slot
+            lines[i].start, lines[i].end, lines[i].interpolated = s, e, True
+            new_entries.append(LyricTimeline(start=s, end=e, line=i))
+
+    # промежутки между соседними якорями
+    for (ia, _sa, ea), (ib, sb, _eb) in zip(anchors, anchors[1:]):
+        between = [i for i in real_idx if ia < i < ib and lines[i].start is None]
+        place(between, ea, sb if sb > ea else ea + 2.0 * len(between))
+
+    # строки до первого якоря
+    fi, fs, _fe = anchors[0]
+    leading = [i for i in real_idx if i < fi and lines[i].start is None]
+    place(leading, 0.0, fs)
+
+    # строки после последнего якоря
+    li, _ls, le = anchors[-1]
+    trailing = [i for i in real_idx if i > li and lines[i].start is None]
+    end_t = audio_end if audio_end and audio_end > le else le + 3.0 * (len(trailing) or 1)
+    place(trailing, le, end_t)
+
+    timeline = sorted(timeline + new_entries, key=lambda e: e.start)
+    return lines, timeline
 
 
 def _word_bounds(words, start, end, word_starts):

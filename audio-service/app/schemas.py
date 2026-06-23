@@ -28,6 +28,7 @@ class LyricLine(BaseModel):
     start: Optional[float] = None
     end: Optional[float] = None
     aligned: bool = False  # True — есть тайминги от Whisper; False — без привязки
+    interpolated: bool = False  # тайминги получены интерполяцией между распознанными строками
     chords: list[str] = Field(default_factory=list)  # все аккорды строки (для сводки)
     words: list[WordChord] = Field(default_factory=list)  # слова с привязкой смены аккорда
 
