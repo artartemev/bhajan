@@ -46,6 +46,36 @@ def test_attach_chords_to_lines():
     assert out[2].chords == []                   # нет таймингов — нет привязки
 
 
+def test_diatonic_labels_major():
+    from app.pipeline.chords import _diatonic_labels
+    # До мажор: C, Dm, Em, F, G, Am
+    s = _diatonic_labels(0, is_minor=False)
+    assert "C:maj" in s and "F:maj" in s and "G:maj" in s
+    assert "D:min" in s and "A:min" in s
+    assert "C:min" not in s
+
+
+def test_diatonic_labels_minor():
+    from app.pipeline.chords import _diatonic_labels
+    # Ля минор: Am, C, Dm, Em, E(dom), F, G
+    s = _diatonic_labels(9, is_minor=True)
+    assert "A:min" in s and "C:maj" in s and "D:min" in s and "G:maj" in s
+
+
+def test_estimate_key_detects_c_major():
+    import pytest
+    np = pytest.importorskip("numpy")  # numpy нужен; пропускаем, если нет
+    from app.pipeline.chords import _estimate_key
+    # хрома с энергией на нотах до-мажора (C,E,G,F,D,A,B)
+    prof = np.zeros((12, 1))
+    for pc in (0, 2, 4, 5, 7, 9, 11):
+        prof[pc, 0] = 1.0
+    prof[0, 0] += 1.0  # подчёркиваем тонику C
+    prof[7, 0] += 0.5  # и доминанту G
+    tonic, is_minor = _estimate_key(prof)
+    assert tonic == 0 and not is_minor
+
+
 def test_place_chords_on_words():
     from app.pipeline.align import place_chords_on_words
     # строка из 4 слов на интервале 0..4с; смены аккорда в начале и на 2с

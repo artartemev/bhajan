@@ -277,9 +277,10 @@
           const labels = (r.chords || []).map(c => c.label);
           const warns = (r.warnings || []).map(w => `<div>⚠️ ${escapeHtml(w)}</div>`).join('');
           const hasLyrics = (r.lyrics_lines || []).length > 0;
+          const keyStr = r.key ? `<b>Тональность:</b> <code>${escapeHtml(r.key)}</code> · ` : '';
           body = `<div class="files"><b>Стемы:</b> ${stems || '—'}</div>
                   <div class="files"><b>MIDI:</b> ${midi || '—'}</div>
-                  <div class="chords"><b>Аккорды (${labels.length}):</b> ${chordsSummary(labels)}</div>
+                  <div class="chords">${keyStr}<b>Аккорды (${labels.length}):</b> ${chordsSummary(labels)}</div>
                   ${warns ? `<div class="chords">${warns}</div>` : ''}
                   ${hasLyrics ? renderPlayer(j) : ''}`;
         }

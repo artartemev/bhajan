@@ -111,6 +111,14 @@ def _run(job_id: str) -> None:
         encoding="utf-8",
     )
 
+    # тональность песни (для аккордового листа)
+    key = None
+    if not stub:
+        try:
+            key = chords_mod.estimate_key(chord_source)
+        except Exception as exc:  # noqa: BLE001
+            warnings.append(_warn("Тональность", exc, "пропущена"))
+
     # 5. Выравнивание текста с аудио (если пользователь передал текст)
     lyrics_lines = []
     lyrics_timeline = []
@@ -156,6 +164,7 @@ def _run(job_id: str) -> None:
         midi=midi,
         chords_file=chords_file.name,
         chords=chord_spans,
+        key=key,
         lyrics_file=lyrics_file_name,
         lyrics_lines=lyrics_lines,
         lyrics_timeline=lyrics_timeline,

@@ -63,6 +63,7 @@ class JobResult(BaseModel):
     midi: dict[str, str] = Field(default_factory=dict)
     chords_file: Optional[str] = None
     chords: list[ChordSpan] = Field(default_factory=list)
+    key: Optional[str] = None  # тональность песни, напр. "Bm" / "D"
     lyrics_file: Optional[str] = None
     lyrics_lines: list[LyricLine] = Field(default_factory=list)
     lyrics_timeline: list[LyricTimeline] = Field(default_factory=list)

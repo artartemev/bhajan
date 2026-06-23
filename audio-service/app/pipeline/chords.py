@@ -58,11 +58,13 @@ def _templates():
 
 
 def detect_chords_librosa(audio_path: Path) -> list[ChordSpan]:
-    """Аккорды через хрому librosa + шаблоны трезвучий.
+    """Аккорды через хрому librosa — beat-синхронно и с учётом тональности.
 
-    Против «стены» дрожащих аккордов: сильное сглаживание хромы, mode-фильтр
-    подписей по кадрам (убирает мерцание maj↔min) и слияние коротких аккордов в
-    соседние до минимальной длительности из конфига.
+    Идея «как у музыканта»: оцениваем тональность, делим звук по долям (beat
+    tracking), на каждом отрезке берём усреднённую хрому и подбираем трезвучие со
+    смещением в сторону диатоники тональности (убирает дрожание maj↔min на дроне).
+    Затем сливаем соседние одинаковые и короткие → короткая честная
+    последовательность ≈ аккорд на такт.
     """
     import librosa
     import numpy as np
@@ -74,7 +76,54 @@ def detect_chords_librosa(audio_path: Path) -> list[ChordSpan]:
     hop = 2048
     chroma = librosa.feature.chroma_cqt(y=y_harm, sr=sr, hop_length=hop)
 
-    # сильное сглаживание хромы по времени (медиана убирает короткие всплески)
+    tonic, is_minor = _estimate_key(chroma)
+    templates, labels = _templates()
+    in_key = _diatonic_labels(tonic, is_minor)
+    bonus = np.array([0.12 if labels[k] in in_key else 0.0 for k in range(len(labels))])
+
+    try:
+        _tempo, beats = librosa.beat.beat_track(y=y, sr=sr, hop_length=hop)
+    except Exception:
+        beats = np.array([], dtype=int)
+
+    if len(beats) >= 4:
+        bounds = [0, *np.asarray(beats).tolist(), chroma.shape[1]]
+        seg_chroma, seg_times = [], []
+        for a, b in zip(bounds, bounds[1:]):
+            if b <= a:
+                continue
+            seg_chroma.append(np.median(chroma[:, a:b], axis=1))
+            seg_times.append((
+                float(librosa.frames_to_time(a, sr=sr, hop_length=hop)),
+                float(librosa.frames_to_time(b, sr=sr, hop_length=hop)),
+            ))
+        cn = np.stack(seg_chroma, axis=1)
+        cn = cn / (np.linalg.norm(cn, axis=0, keepdims=True) + 1e-9)
+        scores = templates @ cn + bonus[:, None]
+        idx = scores.argmax(axis=0)
+        best = scores.max(axis=0)
+        raw = [
+            (seg_times[i][0], seg_times[i][1], int(idx[i]))
+            for i in range(len(seg_times))
+            if best[i] >= _MATCH_THRESHOLD
+        ]
+        collapsed: list[tuple[float, float, int]] = []
+        for s, e, k in raw:
+            if collapsed and collapsed[-1][2] == k:
+                collapsed[-1] = (collapsed[-1][0], e, k)
+            else:
+                collapsed.append((s, e, k))
+        merged = _merge_short(collapsed, settings.chord_min_duration)
+        return [ChordSpan(start=s, end=e, label=labels[k]) for (s, e, k) in merged]
+
+    # запасной вариант без долей — по кадрам со сглаживанием
+    return _detect_chords_frame_based(chroma, sr, hop, templates, labels, bonus, settings)
+
+
+def _detect_chords_frame_based(chroma, sr, hop, templates, labels, bonus, settings) -> list[ChordSpan]:
+    import librosa
+    import numpy as np
+
     try:
         from scipy.ndimage import median_filter
 
@@ -85,18 +134,14 @@ def detect_chords_librosa(audio_path: Path) -> list[ChordSpan]:
 
     times = librosa.times_like(chroma, sr=sr, hop_length=hop)
     frame_dur = hop / sr
-    templates, labels = _templates()
     cn = chroma / (np.linalg.norm(chroma, axis=0, keepdims=True) + 1e-9)
-    scores = templates @ cn  # (24, n_frames)
+    scores = templates @ cn + bonus[:, None]
     idx = scores.argmax(axis=0)
     best = scores.max(axis=0)
-    idx = np.where(best >= _MATCH_THRESHOLD, idx, -1)  # -1 = «нет аккорда»
-
-    # mode-фильтр подписей: окно ≈ минимальная длительность аккорда
+    idx = np.where(best >= _MATCH_THRESHOLD, idx, -1)
     win = max(3, int(round(settings.chord_min_duration / frame_dur)) | 1)
     idx = _mode_filter(idx, win)
 
-    # собираем непрерывные участки одинаковой подписи
     raw: list[tuple[float, float, int]] = []
     i, n = 0, len(idx)
     while i < n:
@@ -111,6 +156,51 @@ def detect_chords_librosa(audio_path: Path) -> list[ChordSpan]:
 
     merged = _merge_short(raw, settings.chord_min_duration)
     return [ChordSpan(start=s, end=e, label=labels[k]) for (s, e, k) in merged]
+
+
+def _estimate_key(chroma) -> tuple[int, bool]:
+    """Оценка тональности (профили Крумхансла). Возвращает (тоника 0-11, минор?)."""
+    import numpy as np
+
+    prof = chroma.mean(axis=1)
+    p = prof - prof.mean()
+    maj = np.array([6.35, 2.23, 3.48, 2.33, 4.38, 4.09, 2.52, 5.19, 2.39, 3.66, 2.29, 2.88])
+    minp = np.array([6.33, 2.68, 3.52, 5.38, 2.60, 3.53, 2.54, 4.75, 3.98, 2.69, 3.34, 3.17])
+    maj = maj - maj.mean()
+    minp = minp - minp.mean()
+
+    def corr(a, b):
+        denom = (np.linalg.norm(a) * np.linalg.norm(b)) or 1.0
+        return float(np.dot(a, b) / denom)
+
+    best = (-1e9, 0, False)
+    for t in range(12):
+        cm = corr(np.roll(maj, t), p)
+        ci = corr(np.roll(minp, t), p)
+        if cm > best[0]:
+            best = (cm, t, False)
+        if ci > best[0]:
+            best = (ci, t, True)
+    return best[1], best[2]
+
+
+def _diatonic_labels(tonic: int, is_minor: bool) -> set[str]:
+    """Диатонические трезвучия тональности (без уменьшённых — их нет в шаблонах)."""
+    if is_minor:
+        steps = [(0, "min"), (3, "maj"), (5, "min"), (7, "min"), (7, "maj"), (8, "maj"), (10, "maj")]
+    else:
+        steps = [(0, "maj"), (2, "min"), (4, "min"), (5, "maj"), (7, "maj"), (9, "min")]
+    return {f"{_NOTE_NAMES[(tonic + s) % 12]}:{q}" for s, q in steps}
+
+
+def estimate_key(audio_path: Path) -> str:
+    """Тональность трека как читаемая строка, напр. 'Bm' или 'D'."""
+    import librosa
+
+    y, sr = librosa.load(str(audio_path), mono=True)
+    chroma = librosa.feature.chroma_cqt(y=librosa.effects.harmonic(y), sr=sr)
+    tonic, is_minor = _estimate_key(chroma)
+    return f"{_NOTE_NAMES[tonic]}{'m' if is_minor else ''}"
 
 
 def _mode_filter(idx, win: int):
