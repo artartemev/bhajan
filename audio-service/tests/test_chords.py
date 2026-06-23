@@ -74,6 +74,35 @@ def test_place_chords_skips_repeats():
     assert flat == ["C:maj", "F:maj"]
 
 
+def test_place_chords_uses_word_timestamps():
+    from app.pipeline.align import place_chords_on_words
+    # 4 слова, но реальные тайминги Whisper: первые три спеты быстро (0..1с),
+    # последнее тянется (1..4с). Смена аккорда на 1.0с должна лечь на 4-е слово.
+    chords = [
+        ChordSpan(start=0.0, end=1.0, label="C:maj"),
+        ChordSpan(start=1.0, end=4.0, label="G:maj"),
+    ]
+    word_starts = [0.0, 0.3, 0.6, 1.0]
+    words = place_chords_on_words("раз два три четыре", 0.0, 4.0, chords, word_starts=word_starts)
+    assert words[0].chords == ["C:maj"]
+    # смена на G ложится на последнее слово (которое реально звучит на 1.0с)
+    assert "G:maj" in words[3].chords
+
+
+def test_attach_word_chords_from_timeline():
+    from app.pipeline.align import attach_word_chords
+    from app.schemas import LyricLine, LyricTimeline
+    lines = [LyricLine(text="раз два три четыре", start=0.0, end=4.0, aligned=True)]
+    timeline = [LyricTimeline(start=0.0, end=4.0, line=0, word_starts=[0.0, 0.3, 0.6, 1.0])]
+    chords = [
+        ChordSpan(start=0.0, end=1.0, label="C:maj"),
+        ChordSpan(start=1.0, end=4.0, label="G:maj"),
+    ]
+    out = attach_word_chords(lines, timeline, chords)
+    assert out[0].words[0].chords == ["C:maj"]
+    assert "G:maj" in out[0].words[3].chords
+
+
 def test_place_chords_no_timing_returns_plain_words():
     from app.pipeline.align import place_chords_on_words
     words = place_chords_on_words("раз два", None, None, [ChordSpan(start=0, end=1, label="C:maj")])

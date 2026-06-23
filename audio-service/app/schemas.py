@@ -39,6 +39,7 @@ class LyricTimeline(BaseModel):
     end: float
     line: int
     chords: list[str] = Field(default_factory=list)
+    word_starts: list[float] = Field(default_factory=list)  # тайминги слов Whisper в этом фрагменте
 
 
 class CreateJobRequest(BaseModel):

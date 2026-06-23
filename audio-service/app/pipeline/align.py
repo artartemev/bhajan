@@ -186,6 +186,7 @@ def _whisper_segments(audio_path: Path, language: str) -> list[dict]:
     segments, _info = model.transcribe(
         str(audio_path),
         language=language,
+        word_timestamps=True,       # тайминги каждого слова — для раскладки аккордов
         vad_filter=True,            # режет тишину/проигрыши между повторами
         condition_on_previous_text=False,  # повторы не «залипают» друг на друге
     )
@@ -196,7 +197,14 @@ def _whisper_segments(audio_path: Path, language: str) -> list[dict]:
         text = (seg.text or "").strip()
         if not text:
             continue
-        out.append({"text": text, "start": float(seg.start), "end": float(seg.end)})
+        word_starts = [
+            float(w.start) for w in (seg.words or [])
+            if w.start is not None
+        ]
+        out.append({
+            "text": text, "start": float(seg.start), "end": float(seg.end),
+            "word_starts": word_starts,
+        })
     return out
 
 
@@ -301,6 +309,7 @@ def _match_segments_to_lines(segments: list[dict], lines: list[str]) -> list[Lyr
         if best_idx is not None and best_ratio >= _MIN_RATIO:
             timeline.append(LyricTimeline(
                 start=seg["start"], end=seg["end"] + _TAIL_S, line=best_idx,
+                word_starts=seg.get("word_starts", []),
             ))
     return timeline
 
@@ -315,24 +324,44 @@ def _lines_with_first_occurrence(lines: list[str], timeline: list[LyricTimeline]
     return out
 
 
-def place_chords_on_words(text: str, start, end, chord_spans) -> list[WordChord]:
-    """Раскладывает слова строки по времени интервала [start, end] (взвешенно по длине)
-    и ставит СМЕНУ аккорда над тем словом, где она происходит. Возвращает список слов."""
+def _word_bounds(words, start, end, word_starts):
+    """Временные границы каждого слова. Если есть тайминги слов Whisper — используем
+    их реальную плотность (учитывает паузы/распевы); иначе делим по длине слов."""
+    n = len(words)
+    if word_starts and len(word_starts) >= 2:
+        # точки времени «по словам» (монотонные), нормируем на [start, end]
+        pts = [start] + sorted(t for t in word_starts if start <= t <= end) + [end]
+        m = len(pts) - 1
+
+        def frac_to_time(f: float) -> float:
+            x = f * m
+            i = min(int(x), m - 1)
+            return pts[i] + (pts[i + 1] - pts[i]) * (x - i)
+
+        return [(frac_to_time(i / n), frac_to_time((i + 1) / n)) for i in range(n)]
+
+    # запасной вариант: пропорционально длине слова
+    lengths = [max(1, len(w)) for w in words]
+    total = sum(lengths)
+    dur = end - start
+    bounds, acc = [], start
+    for L in lengths:
+        nxt = acc + dur * L / total
+        bounds.append((acc, nxt))
+        acc = nxt
+    return bounds
+
+
+def place_chords_on_words(text: str, start, end, chord_spans, word_starts=None) -> list[WordChord]:
+    """Раскладывает слова строки по времени интервала [start, end] и ставит СМЕНУ
+    аккорда над тем словом, где она происходит. word_starts — тайминги слов Whisper
+    (если есть, раскладка точная). Возвращает список слов."""
     words = text.split()
     out = [WordChord(text=w) for w in words]
     if not words or start is None or end is None or end <= start or not chord_spans:
         return out
 
-    # временные границы каждого слова, пропорционально длине
-    lengths = [max(1, len(w)) for w in words]
-    total = sum(lengths)
-    dur = end - start
-    bounds: list[tuple[float, float]] = []
-    acc = start
-    for L in lengths:
-        nxt = acc + dur * L / total
-        bounds.append((acc, nxt))
-        acc = nxt
+    bounds = _word_bounds(words, start, end, word_starts or [])
 
     relevant = sorted(
         (c for c in chord_spans if c.end > start and c.start < end),
@@ -349,11 +378,18 @@ def place_chords_on_words(text: str, start, end, chord_spans) -> list[WordChord]
     return out
 
 
-def attach_word_chords(lines: list[LyricLine], chord_spans) -> list[LyricLine]:
-    """Для каждой выровненной строки строит пословную раскладку аккордов (по её
-    первому появлению — start/end уже проставлены)."""
-    for line in lines:
-        line.words = place_chords_on_words(line.text, line.start, line.end, chord_spans)
+def attach_word_chords(lines: list[LyricLine], timeline: list[LyricTimeline], chord_spans) -> list[LyricLine]:
+    """Для каждой выровненной строки строит пословную раскладку аккордов по её
+    первому появлению, используя тайминги слов Whisper из таймлайна."""
+    first: dict[int, LyricTimeline] = {}
+    for e in timeline:
+        first.setdefault(e.line, e)
+    for i, line in enumerate(lines):
+        e = first.get(i)
+        word_starts = e.word_starts if e else []
+        line.words = place_chords_on_words(
+            line.text, line.start, line.end, chord_spans, word_starts=word_starts,
+        )
     return lines
 
 
