@@ -104,13 +104,10 @@ def detect_chords_librosa(audio_path: Path) -> list[ChordSpan]:
         cn = np.stack(seg_chroma, axis=1)
         cn = cn / (np.linalg.norm(cn, axis=0, keepdims=True) + 1e-9)
         scores = templates @ cn + bonus[:, None]
-        idx = scores.argmax(axis=0)
-        best = scores.max(axis=0)
-        raw = [
-            (seg_times[i][0], seg_times[i][1], int(idx[i]))
-            for i in range(len(seg_times))
-            if best[i] >= _MATCH_THRESHOLD
-        ]
+        # Витерби со штрафом за смену аккорда: держим аккорд, пока не появятся
+        # сильные основания сменить — это и убирает «вакханалию» из сотен смен
+        path = _viterbi_path(scores, settings.chord_change_penalty)
+        raw = [(seg_times[i][0], seg_times[i][1], int(path[i])) for i in range(len(seg_times))]
         collapsed: list[tuple[float, float, int]] = []
         for s, e, k in raw:
             if collapsed and collapsed[-1][2] == k:
@@ -140,18 +137,11 @@ def _detect_chords_frame_based(chroma, sr, hop, templates, labels, bonus, settin
     frame_dur = hop / sr
     cn = chroma / (np.linalg.norm(chroma, axis=0, keepdims=True) + 1e-9)
     scores = templates @ cn + bonus[:, None]
-    idx = scores.argmax(axis=0)
-    best = scores.max(axis=0)
-    idx = np.where(best >= _MATCH_THRESHOLD, idx, -1)
-    win = max(3, int(round(settings.chord_min_duration / frame_dur)) | 1)
-    idx = _mode_filter(idx, win)
+    idx = _viterbi_path(scores, settings.chord_change_penalty)
 
     raw: list[tuple[float, float, int]] = []
     i, n = 0, len(idx)
     while i < n:
-        if idx[i] < 0:
-            i += 1
-            continue
         j = i + 1
         while j < n and idx[j] == idx[i]:
             j += 1
@@ -160,6 +150,34 @@ def _detect_chords_frame_based(chroma, sr, hop, templates, labels, bonus, settin
 
     merged = _merge_short(raw, settings.chord_min_duration)
     return [ChordSpan(start=s, end=e, label=labels[k]) for (s, e, k) in merged]
+
+
+def _viterbi_path(scores, change_penalty: float):
+    """Витерби по столбцам scores (K×T, выше — лучше) со штрафом за смену состояния.
+
+    Переход «остаться» бесплатен, «сменить» стоит change_penalty. За счёт трюка с
+    лучшим предыдущим состоянием работает за O(K·T). Возвращает путь длины T.
+    """
+    import numpy as np
+
+    K, T = scores.shape
+    if T == 0:
+        return np.zeros(0, dtype=int)
+    dp = np.full((K, T), -1e18)
+    back = np.zeros((K, T), dtype=int)
+    dp[:, 0] = scores[:, 0]
+    for t in range(1, T):
+        prev = dp[:, t - 1]
+        best_idx = int(prev.argmax())
+        switch_val = prev[best_idx] - change_penalty
+        stay_better = prev >= switch_val
+        dp[:, t] = np.where(stay_better, prev, switch_val) + scores[:, t]
+        back[:, t] = np.where(stay_better, np.arange(K), best_idx)
+    path = np.zeros(T, dtype=int)
+    path[-1] = int(dp[:, -1].argmax())
+    for t in range(T - 1, 0, -1):
+        path[t - 1] = back[path[t], t]
+    return path
 
 
 def _estimate_key(chroma) -> tuple[int, bool]:

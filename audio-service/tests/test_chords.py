@@ -76,6 +76,19 @@ def test_estimate_key_detects_c_major():
     assert tonic == 0 and not is_minor
 
 
+def test_viterbi_smooths_single_outlier():
+    import pytest
+    np = pytest.importorskip("numpy")
+    from app.pipeline.chords import _viterbi_path
+    # состояние 0 уверенно лучшее, кроме одного «выброса» в середине на состояние 1
+    scores = np.zeros((3, 7))
+    scores[0, :] = 1.0
+    scores[1, 3] = 1.05  # слабый выброс
+    # без штрафа — переключится на выброс; со штрафом — удержит состояние 0
+    assert list(_viterbi_path(scores, change_penalty=0.0)) == [0, 0, 0, 1, 0, 0, 0]
+    assert list(_viterbi_path(scores, change_penalty=0.5)) == [0] * 7
+
+
 def test_place_chords_on_words():
     from app.pipeline.align import place_chords_on_words
     # строка из 4 слов на интервале 0..4с; смены аккорда в начале и на 2с

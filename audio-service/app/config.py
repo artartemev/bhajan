@@ -50,6 +50,7 @@ class Settings:
     chord_min_duration: float     # минимальная длительность аккорда, с (против дробления)
     chord_source: str             # стем для детекции аккордов: vocals/harmonium/instrumental
     chord_beats_per_bar: int      # долей в такте — аккорд берётся на такт, а не на долю
+    chord_change_penalty: float   # штраф Витерби за смену аккорда (больше → меньше смен)
     # --- Выравнивание текста (forced alignment) ---
     asr_model: str                # размер Whisper: tiny/base/small/medium/large-v3
     asr_language: str             # язык: hi (хинди), sa (санскрит), bn, en и т.д.
@@ -80,6 +81,7 @@ class Settings:
             chord_min_duration=float(os.environ.get("CHORD_MIN_DURATION", "0.8")),
             chord_source=os.environ.get("CHORD_SOURCE", "vocals").strip().lower(),
             chord_beats_per_bar=int(os.environ.get("CHORD_BEATS_PER_BAR", "4")),
+            chord_change_penalty=float(os.environ.get("CHORD_CHANGE_PENALTY", "0.3")),
             asr_model=os.environ.get("ASR_MODEL", "small"),
             asr_language=os.environ.get("ASR_LANGUAGE", "hi"),
             asr_device=os.environ.get("ASR_DEVICE", "auto"),
