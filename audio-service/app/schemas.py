@@ -18,12 +18,18 @@ class JobStatus(str, Enum):
     error = "error"
 
 
+class WordChord(BaseModel):
+    text: str
+    chords: list[str] = Field(default_factory=list)  # аккорды, меняющиеся на этом слове
+
+
 class LyricLine(BaseModel):
     text: str
     start: Optional[float] = None
     end: Optional[float] = None
     aligned: bool = False  # True — есть тайминги от Whisper; False — без привязки
-    chords: list[str] = Field(default_factory=list)  # аккорды, звучащие во время строки
+    chords: list[str] = Field(default_factory=list)  # все аккорды строки (для сводки)
+    words: list[WordChord] = Field(default_factory=list)  # слова с привязкой смены аккорда
 
 
 class LyricTimeline(BaseModel):

@@ -130,8 +130,9 @@ def _run(job_id: str) -> None:
             stub=lambda: align_mod.fallback_align(view.lyrics or "", align_source),
             use_stub=stub, warnings=warnings,
         ) or ([], [])
-        # привязываем аккорды к строкам и к фрагментам таймлайна
+        # привязываем аккорды к строкам, к словам и к фрагментам таймлайна
         lyrics_lines = align_mod.attach_chords(lyrics_lines, chord_spans)
+        lyrics_lines = align_mod.attach_word_chords(lyrics_lines, chord_spans)
         lyrics_timeline = align_mod.attach_chords_to_timeline(lyrics_timeline, chord_spans)
         if not stub and not lyrics_timeline:
             warnings.append(

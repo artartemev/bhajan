@@ -23,7 +23,7 @@ from pathlib import Path
 from typing import Optional
 
 from ..config import settings
-from ..schemas import LyricLine, LyricTimeline
+from ..schemas import LyricLine, LyricTimeline, WordChord
 
 # Минимальная похожесть строки на найденный фрагмент Whisper, чтобы считать привязкой.
 _MIN_RATIO = 0.35
@@ -313,6 +313,48 @@ def _lines_with_first_occurrence(lines: list[str], timeline: list[LyricTimeline]
         if not ln.aligned:
             ln.start, ln.end, ln.aligned = entry.start, entry.end, True
     return out
+
+
+def place_chords_on_words(text: str, start, end, chord_spans) -> list[WordChord]:
+    """Раскладывает слова строки по времени интервала [start, end] (взвешенно по длине)
+    и ставит СМЕНУ аккорда над тем словом, где она происходит. Возвращает список слов."""
+    words = text.split()
+    out = [WordChord(text=w) for w in words]
+    if not words or start is None or end is None or end <= start or not chord_spans:
+        return out
+
+    # временные границы каждого слова, пропорционально длине
+    lengths = [max(1, len(w)) for w in words]
+    total = sum(lengths)
+    dur = end - start
+    bounds: list[tuple[float, float]] = []
+    acc = start
+    for L in lengths:
+        nxt = acc + dur * L / total
+        bounds.append((acc, nxt))
+        acc = nxt
+
+    relevant = sorted(
+        (c for c in chord_spans if c.end > start and c.start < end),
+        key=lambda c: c.start,
+    )
+    last = None
+    for c in relevant:
+        if c.label == last:  # только МОМЕНТЫ смены аккорда
+            continue
+        t = max(c.start, start)
+        wi = next((i for i, (ws, we) in enumerate(bounds) if t < we), len(words) - 1)
+        out[wi].chords.append(c.label)
+        last = c.label
+    return out
+
+
+def attach_word_chords(lines: list[LyricLine], chord_spans) -> list[LyricLine]:
+    """Для каждой выровненной строки строит пословную раскладку аккордов (по её
+    первому появлению — start/end уже проставлены)."""
+    for line in lines:
+        line.words = place_chords_on_words(line.text, line.start, line.end, chord_spans)
+    return lines
 
 
 def attach_chords_to_timeline(timeline: list[LyricTimeline], chord_spans) -> list[LyricTimeline]:

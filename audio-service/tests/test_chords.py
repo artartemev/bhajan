@@ -46,6 +46,41 @@ def test_attach_chords_to_lines():
     assert out[2].chords == []                   # нет таймингов — нет привязки
 
 
+def test_place_chords_on_words():
+    from app.pipeline.align import place_chords_on_words
+    # строка из 4 слов на интервале 0..4с; смены аккорда в начале и на 2с
+    chords = [
+        ChordSpan(start=0.0, end=2.0, label="C:maj"),
+        ChordSpan(start=2.0, end=4.0, label="G:maj"),
+    ]
+    words = place_chords_on_words("один два три четыре", 0.0, 4.0, chords)
+    assert [w.text for w in words] == ["один", "два", "три", "четыре"]
+    # первый аккорд — на первом слове
+    assert words[0].chords == ["C:maj"]
+    # смена на G:maj — где-то во второй половине строки
+    g_positions = [i for i, w in enumerate(words) if "G:maj" in w.chords]
+    assert g_positions and g_positions[0] >= 2
+
+
+def test_place_chords_skips_repeats():
+    from app.pipeline.align import place_chords_on_words
+    chords = [
+        ChordSpan(start=0.0, end=1.0, label="C:maj"),
+        ChordSpan(start=1.0, end=2.0, label="C:maj"),  # тот же — не дублируем
+        ChordSpan(start=2.0, end=3.0, label="F:maj"),
+    ]
+    words = place_chords_on_words("a b c d e f", 0.0, 3.0, chords)
+    flat = [c for w in words for c in w.chords]
+    assert flat == ["C:maj", "F:maj"]
+
+
+def test_place_chords_no_timing_returns_plain_words():
+    from app.pipeline.align import place_chords_on_words
+    words = place_chords_on_words("раз два", None, None, [ChordSpan(start=0, end=1, label="C:maj")])
+    assert [w.text for w in words] == ["раз", "два"]
+    assert all(not w.chords for w in words)
+
+
 def test_attach_chords_dedupes_consecutive():
     lines = [LyricLine(text="строка", start=0.0, end=3.0, aligned=True)]
     chords = [
