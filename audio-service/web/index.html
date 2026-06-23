@@ -137,8 +137,11 @@
       return null;
     }
 
+    window.__timeline = window.__timeline || {};
+
     function renderPlayer(job) {
       const r = job.result;
+      window.__timeline[job.id] = r.lyrics_timeline || [];
       const audioName = (r.stems && (r.stems.vocals || Object.values(r.stems)[0])) || 'stems/vocals.wav';
       const audioId = `audio-${job.id}`;
       const lyricsId = `lyrics-${job.id}`;
@@ -196,22 +199,28 @@
         });
       });
 
-      // подсветка текущей строки по времени
+      // подсветка по ТАЙМЛАЙНУ (с повторами): находим фрагмент, накрывающий t,
+      // и подсвечиваем строку с его индексом
+      const timeline = (window.__timeline[job.id] || [])
+        .filter(e => e.start != null && e.end != null)
+        .sort((a, b) => a.start - b.start);
+
       audio.addEventListener('timeupdate', () => {
         const t = audio.currentTime;
-        let activeIdx = -1;
-        for (let i = 0; i < lines.length; i++) {
-          const s = parseFloat(lines[i].dataset.start);
-          const e = parseFloat(lines[i].dataset.end);
-          if (!isNaN(s) && !isNaN(e) && t >= s && t < e) { activeIdx = i; break; }
+        let activeLine = -1;
+        for (const e of timeline) {
+          if (t >= e.start && t < e.end) { activeLine = e.line; break; }
+          if (e.start > t) break;
         }
-        lines.forEach((el, i) => el.classList.toggle('current', i === activeIdx));
-        if (activeIdx >= 0) {
-          const el = lines[activeIdx];
-          const cRect = container.getBoundingClientRect();
-          const eRect = el.getBoundingClientRect();
-          if (eRect.top < cRect.top + 20 || eRect.bottom > cRect.bottom - 20) {
-            container.scrollTo({ top: el.offsetTop - container.clientHeight/2 + el.clientHeight/2, behavior: 'smooth' });
+        lines.forEach((el) => el.classList.toggle('current', parseInt(el.dataset.i, 10) === activeLine));
+        if (activeLine >= 0) {
+          const el = lines.find(x => parseInt(x.dataset.i, 10) === activeLine);
+          if (el) {
+            const cRect = container.getBoundingClientRect();
+            const eRect = el.getBoundingClientRect();
+            if (eRect.top < cRect.top + 20 || eRect.bottom > cRect.bottom - 20) {
+              container.scrollTo({ top: el.offsetTop - container.clientHeight/2 + el.clientHeight/2, behavior: 'smooth' });
+            }
           }
         }
       });

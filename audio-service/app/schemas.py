@@ -26,6 +26,15 @@ class LyricLine(BaseModel):
     chords: list[str] = Field(default_factory=list)  # аккорды, звучащие во время строки
 
 
+class LyricTimeline(BaseModel):
+    """Один спетый фрагмент в порядке исполнения (с повторами). line — индекс в lyrics_lines."""
+
+    start: float
+    end: float
+    line: int
+    chords: list[str] = Field(default_factory=list)
+
+
 class CreateJobRequest(BaseModel):
     """Тело запроса, когда источник — ссылка на YouTube (а не файл)."""
 
@@ -48,6 +57,7 @@ class JobResult(BaseModel):
     chords: list[ChordSpan] = Field(default_factory=list)
     lyrics_file: Optional[str] = None
     lyrics_lines: list[LyricLine] = Field(default_factory=list)
+    lyrics_timeline: list[LyricTimeline] = Field(default_factory=list)
     lyrics_language: Optional[str] = None
     stub: bool = False
     warnings: list[str] = Field(default_factory=list)

@@ -1,15 +1,18 @@
-"""Forced alignment: известный текст ↔ аудио вокала.
+"""Forced alignment: известный текст ↔ аудио вокала (с учётом повторов).
 
-Логика:
-  1. ASR через faster-whisper по vocals.wav на выбранном языке (hi/sa/bn/en/...).
-     Берём word-level таймстампы. Whisper-у НЕ доверяем как тексту — только времени.
-  2. Сопоставляем НАШИ строки текста с потоком слов Whisper через difflib (по
-     нормализованной строке). Каждая строка получает start/end по тем словам
-     Whisper, на которые она «легла».
-  3. Если для строки совпадения нет — отдаём её без таймингов (aligned=False).
+В киртане строки/куплеты поются помногу раз, есть хор и перекличка. Поэтому
+логика «перевёрнута»: мы не укладываем текст на аудио один раз, а берём то, что
+Whisper реально распознал ПО ВРЕМЕНИ (в порядке исполнения), и каждый его
+фрагмент сопоставляем с самой похожей строкой нашего текста.
 
-Фоллбэк: если faster-whisper не установлен/упал — равномерно распределяем строки
-по длительности трека. Это грубо, но не валит пайплайн.
+  1. ASR (faster-whisper) по vocals.wav → сегменты со start/end. Тексту Whisper
+     не доверяем — только времени и грубой форме слов.
+  2. Каждый сегмент → ближайшая строка текста (difflib по нормализованной форме).
+     Получаем ТАЙМЛАЙН: последовательность (start, end, индекс_строки) с повторами.
+  3. lyrics_lines — это исходный текст (для показа). Таймлайн ведёт подсветку:
+     одна строка, спетая N раз, подсветится N раз.
+
+Фоллбэк: если faster-whisper недоступен — равномерно делим трек по строкам.
 """
 from __future__ import annotations
 
@@ -20,7 +23,7 @@ from pathlib import Path
 from typing import Optional
 
 from ..config import settings
-from ..schemas import LyricLine
+from ..schemas import LyricLine, LyricTimeline
 
 # Минимальная похожесть строки на найденный фрагмент Whisper, чтобы считать привязкой.
 _MIN_RATIO = 0.35
@@ -55,19 +58,35 @@ def _is_structural(line: str) -> bool:
     return bool(re.match(r"^[\[\(].+[\]\)]$", line.strip()))
 
 
-def align_lyrics(audio_path: Path, lyrics: str, *, language: Optional[str] = None) -> list[LyricLine]:
-    """Главная функция. Бросает RuntimeError только если совсем нет аудио."""
+def align_lyrics(
+    audio_path: Path, lyrics: str, *, language: Optional[str] = None
+) -> tuple[list[LyricLine], list[LyricTimeline]]:
+    """Основной путь (ASR). Возвращает (строки_для_показа, таймлайн).
+
+    Бросает исключение при недоступности ASR — тогда вызывающий код берёт
+    fallback_align. Так в задачу попадает предупреждение.
+    """
     lines = split_lines(lyrics)
     if not lines:
-        return []
+        return [], []
 
     lang = language or settings.asr_language
-    try:
-        words, _audio_duration = _whisper_words(audio_path, lang)
-        return _match_lines_to_words(lines, words)
-    except Exception:
-        # фоллбэк: равномерное распределение
-        return _equal_split(lines, audio_path)
+    segments = _whisper_segments(audio_path, lang)
+    timeline = _match_segments_to_lines(segments, lines)
+    out_lines = _lines_with_first_occurrence(lines, timeline)
+    return out_lines, timeline
+
+
+def fallback_align(lyrics: str, audio_path: Path) -> tuple[list[LyricLine], list[LyricTimeline]]:
+    """Запасной путь без ASR: равномерное деление трека по строкам (один проход)."""
+    lines_text = split_lines(lyrics)
+    lines = _equal_split(lines_text, audio_path)
+    timeline = [
+        LyricTimeline(start=l.start, end=l.end, line=i)
+        for i, l in enumerate(lines)
+        if l.start is not None and l.end is not None
+    ]
+    return lines, timeline
 
 
 # ---------- ASR ----------
@@ -104,6 +123,35 @@ def _whisper_words(audio_path: Path, language: str) -> tuple[list[dict], float]:
                 continue
             words.append({"text": w.word.strip(), "start": float(w.start), "end": float(w.end)})
     return words, float(info.duration or 0.0)
+
+
+def _whisper_segments(audio_path: Path, language: str) -> list[dict]:
+    """Возвращает сегменты Whisper: [{"text", "start", "end"}] в порядке времени."""
+    from faster_whisper import WhisperModel
+
+    device = settings.asr_device
+    if device == "auto":
+        device = _pick_device()
+    compute_type = settings.asr_compute_type
+    if device != "cpu" and compute_type == "int8":
+        compute_type = "float16"
+
+    model = WhisperModel(settings.asr_model, device=device, compute_type=compute_type)
+    segments, _info = model.transcribe(
+        str(audio_path),
+        language=language,
+        vad_filter=True,            # режет тишину/проигрыши между повторами
+        condition_on_previous_text=False,  # повторы не «залипают» друг на друге
+    )
+    out: list[dict] = []
+    for seg in segments:
+        if seg.start is None or seg.end is None:
+            continue
+        text = (seg.text or "").strip()
+        if not text:
+            continue
+        out.append({"text": text, "start": float(seg.start), "end": float(seg.end)})
+    return out
 
 
 def _pick_device() -> str:
@@ -182,6 +230,57 @@ def _match_lines_to_words(lines: list[str], words: list[dict]) -> list[LyricLine
         else:
             result.append(LyricLine(text=line))
     return result
+
+
+def _match_segments_to_lines(segments: list[dict], lines: list[str]) -> list[LyricTimeline]:
+    """Каждый сегмент Whisper → ближайшая строка текста. Возвращает таймлайн с повторами."""
+    candidates = [
+        (i, _normalize(text))
+        for i, text in enumerate(lines)
+        if not _is_structural(text) and _normalize(text)
+    ]
+    if not candidates or not segments:
+        return []
+
+    timeline: list[LyricTimeline] = []
+    for seg in segments:
+        seg_norm = _normalize(seg["text"])
+        if not seg_norm:
+            continue
+        best_ratio, best_idx = 0.0, None
+        for idx, line_norm in candidates:
+            r = SequenceMatcher(None, seg_norm, line_norm).ratio()
+            if r > best_ratio:
+                best_ratio, best_idx = r, idx
+        if best_idx is not None and best_ratio >= _MIN_RATIO:
+            timeline.append(LyricTimeline(
+                start=seg["start"], end=seg["end"] + _TAIL_S, line=best_idx,
+            ))
+    return timeline
+
+
+def _lines_with_first_occurrence(lines: list[str], timeline: list[LyricTimeline]) -> list[LyricLine]:
+    """Строки для показа; каждая получает тайминг своего ПЕРВОГО появления в таймлайне."""
+    out = [LyricLine(text=t) for t in lines]
+    for entry in timeline:
+        ln = out[entry.line]
+        if not ln.aligned:
+            ln.start, ln.end, ln.aligned = entry.start, entry.end, True
+    return out
+
+
+def attach_chords_to_timeline(timeline: list[LyricTimeline], chord_spans) -> list[LyricTimeline]:
+    """Аккорды, звучащие в каждом фрагменте таймлайна (без подряд идущих повторов)."""
+    if not chord_spans:
+        return timeline
+    for entry in timeline:
+        labels: list[str] = []
+        for c in chord_spans:
+            if c.end > entry.start and c.start < entry.end:
+                if not labels or labels[-1] != c.label:
+                    labels.append(c.label)
+        entry.chords = labels
+    return timeline
 
 
 # ---------- Фоллбэк ----------

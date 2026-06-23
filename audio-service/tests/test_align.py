@@ -58,3 +58,36 @@ def test_equal_split_fallback(tmp_path):
     out = align._equal_split(lines, tmp_path / "nope.wav")
     assert len(out) == 3
     assert all(not l.aligned for l in out)
+
+
+def test_timeline_handles_repeats():
+    # одна и та же строка спета дважды → в таймлайне две записи на ту же строку
+    lines = ["Shri Ram Jai Ram", "Hare Krishna"]
+    segments = [
+        {"text": "shri ram jai ram", "start": 0.0, "end": 2.0},
+        {"text": "hare krishna",     "start": 2.0, "end": 4.0},
+        {"text": "shri ram jai ram", "start": 4.0, "end": 6.0},  # повтор
+    ]
+    tl = align._match_segments_to_lines(segments, lines)
+    assert [e.line for e in tl] == [0, 1, 0]
+    assert tl[0].start == 0.0 and tl[2].start == 4.0
+
+
+def test_lines_first_occurrence():
+    lines = ["Shri Ram Jai Ram", "Hare Krishna"]
+    from app.schemas import LyricTimeline
+    tl = [
+        LyricTimeline(start=0.0, end=2.0, line=0),
+        LyricTimeline(start=4.0, end=6.0, line=0),  # второй повтор не должен сдвинуть start
+        LyricTimeline(start=2.0, end=4.0, line=1),
+    ]
+    out = align._lines_with_first_occurrence(lines, tl)
+    assert out[0].aligned and out[0].start == 0.0  # первое появление
+    assert out[1].aligned and out[1].start == 2.0
+
+
+def test_segments_ignore_unmatched():
+    lines = ["знакомая строка"]
+    segments = [{"text": "completely unrelated noise", "start": 0.0, "end": 1.0}]
+    tl = align._match_segments_to_lines(segments, lines)
+    assert tl == []

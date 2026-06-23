@@ -113,25 +113,28 @@ def _run(job_id: str) -> None:
 
     # 5. Выравнивание текста с аудио (если пользователь передал текст)
     lyrics_lines = []
+    lyrics_timeline = []
     lyrics_file_name = None
     if view.lyrics and view.lyrics.strip():
         storage.update_job(job_id, status=JobStatus.aligning, progress=0.9)
         align_source = stems.get("vocals", source)
-        lyrics_lines = _stage(
+        lyrics_lines, lyrics_timeline = _stage(
             "Выравнивание текста",
             tiers=[("faster-whisper", lambda: align_mod.align_lyrics(
                 align_source, view.lyrics or "", language=settings.asr_language,
             ))],
-            stub=lambda: align_mod._equal_split(  # noqa: SLF001 — намеренно используем как заглушку
-                align_mod.split_lines(view.lyrics or ""), align_source,
-            ),
+            stub=lambda: align_mod.fallback_align(view.lyrics or "", align_source),
             use_stub=stub, warnings=warnings,
-        ) or []
-        # привязываем аккорды к строкам по таймингам
+        ) or ([], [])
+        # привязываем аккорды к строкам и к фрагментам таймлайна
         lyrics_lines = align_mod.attach_chords(lyrics_lines, chord_spans)
+        lyrics_timeline = align_mod.attach_chords_to_timeline(lyrics_timeline, chord_spans)
         lyrics_path = d / "lyrics.json"
         lyrics_path.write_text(
-            json.dumps([l.model_dump() for l in lyrics_lines], ensure_ascii=False, indent=2),
+            json.dumps({
+                "lines": [l.model_dump() for l in lyrics_lines],
+                "timeline": [t.model_dump() for t in lyrics_timeline],
+            }, ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
         lyrics_file_name = lyrics_path.name
@@ -144,6 +147,7 @@ def _run(job_id: str) -> None:
         chords=chord_spans,
         lyrics_file=lyrics_file_name,
         lyrics_lines=lyrics_lines,
+        lyrics_timeline=lyrics_timeline,
         lyrics_language=settings.asr_language if view.lyrics else None,
         stub=stub,
         warnings=warnings,
