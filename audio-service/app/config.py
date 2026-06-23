@@ -48,6 +48,8 @@ class Settings:
     harmonic_suppression: bool    # подавлять обертоны (+12/+19 полутонов)
     max_polyphony: int            # максимум одновременных нот в кадре
     chord_min_duration: float     # минимальная длительность аккорда, с (против дробления)
+    chord_source: str             # стем для детекции аккордов: vocals/harmonium/instrumental
+    chord_beats_per_bar: int      # долей в такте — аккорд берётся на такт, а не на долю
     # --- Выравнивание текста (forced alignment) ---
     asr_model: str                # размер Whisper: tiny/base/small/medium/large-v3
     asr_language: str             # язык: hi (хинди), sa (санскрит), bn, en и т.д.
@@ -76,6 +78,8 @@ class Settings:
             harmonic_suppression=_env_bool("HARMONIC_SUPPRESSION", True),
             max_polyphony=int(os.environ.get("MAX_POLYPHONY", "6")),
             chord_min_duration=float(os.environ.get("CHORD_MIN_DURATION", "0.8")),
+            chord_source=os.environ.get("CHORD_SOURCE", "vocals").strip().lower(),
+            chord_beats_per_bar=int(os.environ.get("CHORD_BEATS_PER_BAR", "4")),
             asr_model=os.environ.get("ASR_MODEL", "small"),
             asr_language=os.environ.get("ASR_LANGUAGE", "hi"),
             asr_device=os.environ.get("ASR_DEVICE", "auto"),

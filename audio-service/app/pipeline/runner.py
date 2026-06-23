@@ -93,9 +93,10 @@ def _run(job_id: str) -> None:
     if harmonium_mid.exists():
         midi["harmonium"] = harmonium_mid.name
 
-    # 4. Аккорды (по стему фисгармони, если он есть, иначе по исходнику)
+    # 4. Аккорды — по выбранному стему (по умолчанию вокал: мелодия чище задаёт
+    #    тональность и подразумеваемую гармонию, чем шумный стем фисгармони)
     storage.update_job(job_id, status=JobStatus.chords, progress=0.8)
-    chord_source = stems.get("harmonium", source)
+    chord_source = stems.get(settings.chord_source) or stems.get("harmonium") or source
     chord_spans = _stage(
         "Аккорды",
         tiers=[

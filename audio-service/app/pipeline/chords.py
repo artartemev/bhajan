@@ -87,7 +87,11 @@ def detect_chords_librosa(audio_path: Path) -> list[ChordSpan]:
         beats = np.array([], dtype=int)
 
     if len(beats) >= 4:
-        bounds = [0, *np.asarray(beats).tolist(), chroma.shape[1]]
+        # группируем доли в такты (аккорд берётся на такт, а не на каждую долю —
+        # иначе к концу трека получается «вакханалия» из десятков смен)
+        bpb = max(1, settings.chord_beats_per_bar)
+        beat_list = np.asarray(beats).tolist()
+        bounds = sorted({0, *beat_list[::bpb], chroma.shape[1]})
         seg_chroma, seg_times = [], []
         for a, b in zip(bounds, bounds[1:]):
             if b <= a:
