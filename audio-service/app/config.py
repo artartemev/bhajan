@@ -40,6 +40,13 @@ class Settings:
     stub_mode: bool
     # Максимальный размер загрузки, байт
     max_upload_bytes: int
+    # --- Параметры транскрипции/очистки нот (крутятся под конкретный звук) ---
+    note_min_duration: float      # короче — выбрасываем как артефакт, с
+    note_merge_gap: float         # склейка нот того же тона с зазором меньше этого, с
+    harmonium_onset_thr: float    # порог зажигания ноты (доля от макс. CQT)
+    harmonium_offset_thr: float   # порог гашения (ниже onset → гистерезис против дробления)
+    harmonic_suppression: bool    # подавлять обертоны (+12/+19 полутонов)
+    max_polyphony: int            # максимум одновременных нот в кадре
 
     @classmethod
     def load(cls) -> "Settings":
@@ -56,6 +63,12 @@ class Settings:
             force_stub=force_stub,
             stub_mode=force_stub or not ml_available,
             max_upload_bytes=int(os.environ.get("MAX_UPLOAD_MB", "100")) * 1024 * 1024,
+            note_min_duration=float(os.environ.get("NOTE_MIN_DURATION", "0.12")),
+            note_merge_gap=float(os.environ.get("NOTE_MERGE_GAP", "0.10")),
+            harmonium_onset_thr=float(os.environ.get("HARMONIUM_ONSET_THR", "0.18")),
+            harmonium_offset_thr=float(os.environ.get("HARMONIUM_OFFSET_THR", "0.09")),
+            harmonic_suppression=_env_bool("HARMONIC_SUPPRESSION", True),
+            max_polyphony=int(os.environ.get("MAX_POLYPHONY", "6")),
         )
 
 
