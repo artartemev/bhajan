@@ -127,6 +127,8 @@ def _run(job_id: str) -> None:
             ),
             use_stub=stub, warnings=warnings,
         ) or []
+        # привязываем аккорды к строкам по таймингам
+        lyrics_lines = align_mod.attach_chords(lyrics_lines, chord_spans)
         lyrics_path = d / "lyrics.json"
         lyrics_path.write_text(
             json.dumps([l.model_dump() for l in lyrics_lines], ensure_ascii=False, indent=2),

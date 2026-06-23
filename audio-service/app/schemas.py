@@ -23,6 +23,7 @@ class LyricLine(BaseModel):
     start: Optional[float] = None
     end: Optional[float] = None
     aligned: bool = False  # True — есть тайминги от Whisper; False — без привязки
+    chords: list[str] = Field(default_factory=list)  # аккорды, звучащие во время строки
 
 
 class CreateJobRequest(BaseModel):

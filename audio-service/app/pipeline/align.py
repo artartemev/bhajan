@@ -207,6 +207,23 @@ def _equal_split(lines: list[str], audio_path: Path) -> list[LyricLine]:
     return out
 
 
+def attach_chords(lines: list[LyricLine], chord_spans) -> list[LyricLine]:
+    """Для каждой строки с таймингами собирает аккорды, звучащие в её интервале
+    (без подряд идущих повторов)."""
+    if not chord_spans:
+        return lines
+    for line in lines:
+        if line.start is None or line.end is None:
+            continue
+        labels: list[str] = []
+        for c in chord_spans:
+            if c.end > line.start and c.start < line.end:  # пересечение интервалов
+                if not labels or labels[-1] != c.label:
+                    labels.append(c.label)
+        line.chords = labels
+    return lines
+
+
 def _audio_duration(audio_path: Path) -> float:
     try:
         import soundfile as sf

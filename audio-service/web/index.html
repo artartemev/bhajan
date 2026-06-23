@@ -48,11 +48,13 @@
     .lyric-line.unaligned { color:#a8a195; }
     .lyric-line.current { background:var(--hi); color:var(--accent); font-weight:600; transform:translateX(4px); }
     .lyric-line.structural { color:var(--muted); font-style:italic; padding-top:10px; }
+    .lyric-chords { margin-bottom:2px; line-height:1.2; }
     .lyric-chord {
-      display:inline-block; font-size:11px; color:var(--accent);
+      display:inline-block; font-size:11px; font-weight:600; color:var(--accent);
       background:#f5e9d8; padding:0 5px; border-radius:4px; margin-right:4px;
-      vertical-align:1px;
     }
+    .chords-full { font-size:12px; color:var(--muted); }
+    .chords-full details summary { cursor:pointer; color:var(--accent); }
   </style>
 </head>
 <body>
@@ -137,13 +139,7 @@
 
     function renderPlayer(job) {
       const r = job.result;
-      const audioName = (r.stems && (r.stems.vocals || Object.values(r.stems)[0])) || null;
-      const sourceCandidates = ['source.mp3', 'source.wav', 'source.m4a'];
-      let src = audioName ? fileUrl(job.id, audioName) : null;
-      // лучше — оригинал, если есть; пробуем source.mp3 как основной
-      // (если его нет, попадём на vocals — тоже играбельно)
-      const tryOriginal = sourceCandidates.find(n => true); // не знаем точно — js не умеет, пусть сам audio решит
-      // Просто берём source.mp3 и стрим — браузер покажет ошибку, если файла нет; fallback на стемы.
+      const audioName = (r.stems && (r.stems.vocals || Object.values(r.stems)[0])) || 'stems/vocals.wav';
       const audioId = `audio-${job.id}`;
       const lyricsId = `lyrics-${job.id}`;
       const lines = r.lyrics_lines || [];
@@ -154,15 +150,31 @@
         if (/^[\[\(].+[\]\)]$/.test(l.text.trim())) cls.push('structural');
         const dataStart = l.start !== null && l.start !== undefined ? l.start : '';
         const dataEnd = l.end !== null && l.end !== undefined ? l.end : '';
-        return `<div class="${cls.join(' ')}" data-i="${i}" data-start="${dataStart}" data-end="${dataEnd}">${escapeHtml(l.text)}</div>`;
+        const chordRow = (l.chords && l.chords.length)
+          ? `<div class="lyric-chords">${l.chords.map(c => `<span class="lyric-chord">${escapeHtml(c)}</span>`).join('')}</div>`
+          : '';
+        return `<div class="${cls.join(' ')}" data-i="${i}" data-start="${dataStart}" data-end="${dataEnd}">
+          ${chordRow}<div class="lyric-text">${escapeHtml(l.text)}</div>
+        </div>`;
       }).join('');
 
+      // оригинал source.mp3, при ошибке — стем вокала
       return `<div class="player">
         <audio id="${audioId}" controls preload="metadata"
           src="${fileUrl(job.id, 'source.mp3')}"
-          onerror="this.src='${fileUrl(job.id, audioName || 'stems/vocals.wav')}'"></audio>
+          onerror="if(!this.dataset.fb){this.dataset.fb=1;this.src='${fileUrl(job.id, audioName)}';}"></audio>
         <div class="lyrics" id="${lyricsId}">${linesHtml}</div>
       </div>`;
+    }
+
+    function chordsSummary(labels) {
+      if (!labels.length) return '<code>—</code>';
+      const head = labels.slice(0, 24).join(' → ');
+      if (labels.length <= 24) return `<code>${escapeHtml(head)}</code>`;
+      const rest = labels.slice(24).join(' → ');
+      return `<code>${escapeHtml(head)}</code>
+        <details class="chords-full"><summary>ещё ${labels.length - 24}</summary>
+        <code>${escapeHtml(rest)}</code></details>`;
     }
 
     function escapeHtml(s) {
@@ -225,12 +237,12 @@
           const r = j.result;
           const stems = Object.entries(r.stems || {}).map(([k, v]) => fileLink(j.id, v)).join(' ');
           const midi = Object.entries(r.midi || {}).map(([k, v]) => fileLink(j.id, v)).join(' ');
-          const chords = (r.chords || []).map(c => c.label).join(' → ');
+          const labels = (r.chords || []).map(c => c.label);
           const warns = (r.warnings || []).map(w => `<div>⚠️ ${escapeHtml(w)}</div>`).join('');
           const hasLyrics = (r.lyrics_lines || []).length > 0;
           body = `<div class="files"><b>Стемы:</b> ${stems || '—'}</div>
                   <div class="files"><b>MIDI:</b> ${midi || '—'}</div>
-                  <div class="chords"><b>Аккорды:</b> <code>${escapeHtml(chords || '—')}</code></div>
+                  <div class="chords"><b>Аккорды (${labels.length}):</b> ${chordsSummary(labels)}</div>
                   ${warns ? `<div class="chords">${warns}</div>` : ''}
                   ${hasLyrics ? renderPlayer(j) : ''}`;
         }
