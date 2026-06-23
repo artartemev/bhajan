@@ -14,7 +14,7 @@
     .sub { color:var(--muted); margin:0 0 28px; }
     .card { background:var(--card); border:1px solid #ece7df; border-radius:14px; padding:20px; margin-bottom:18px; }
     label { display:block; font-size:13px; color:var(--muted); margin:0 0 6px; }
-    input[type=text], input[type=file], textarea {
+    input[type=text], input[type=file], textarea, select {
       width:100%; padding:10px 12px; border:1px solid #ddd6cb;
       border-radius:10px; background:#fff; font-size:15px; font-family:inherit;
     }
@@ -81,6 +81,17 @@
         <label>Текст песни (необязательно) — каждая строка с новой строки. Строки в [скобках] — структурные.</label>
         <textarea id="lyrics" placeholder="Шри Рам джай Рам джай джай Рам&#10;Шри Рам джай Рам джай джай Рам&#10;[припев]&#10;..."></textarea>
       </div>
+      <div class="row">
+        <label>Язык текста (для синхронизации)</label>
+        <select id="language">
+          <option value="auto">Авто-определение</option>
+          <option value="ru">Русский</option>
+          <option value="en">English</option>
+          <option value="bn" selected>Бенгали (bn)</option>
+          <option value="hi">Хинди (hi)</option>
+          <option value="sa">Санскрит (sa)</option>
+        </select>
+      </div>
       <button id="go">Обработать</button>
     </div>
 
@@ -105,6 +116,7 @@
       const file = document.getElementById('file').files[0];
       const title = document.getElementById('title').value.trim();
       const lyrics = document.getElementById('lyrics').value;
+      const language = document.getElementById('language').value;
       if (!url && !file) { alert('Укажите ссылку или файл'); return; }
 
       const fd = new FormData();
@@ -112,6 +124,7 @@
       if (url) fd.append('youtube_url', url);
       if (file) fd.append('file', file);
       if (lyrics.trim()) fd.append('lyrics', lyrics);
+      if (lyrics.trim()) fd.append('language', language);
 
       const btn = document.getElementById('go');
       btn.disabled = true; btn.textContent = 'Отправляю…';

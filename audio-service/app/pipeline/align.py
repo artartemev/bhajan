@@ -60,13 +60,20 @@ _ROMAN_SCHEMES = {
 }
 
 
+def _has_indic(text: str) -> bool:
+    """Есть ли символы индийских письменностей (деванагари…малаялам: U+0900–0D7F)."""
+    return any("ऀ" <= ch <= "ൿ" for ch in text)
+
+
 def _romanize(text: str) -> str:
     """Приводит индийское письмо (деванагари/бенгали/…) к латинице (IAST).
 
     Нужно, чтобы сравнивать вывод Whisper (часто в деванагари) с романизированным
-    текстом пользователя. Если indic-transliteration не установлен или текст уже
-    латиницей — возвращаем как есть.
+    текстом пользователя. Кириллицу/латиницу не трогаем. Если текст не индийский
+    или indic-transliteration не установлен — возвращаем как есть.
     """
+    if not _has_indic(text):
+        return text
     try:
         from indic_transliteration import sanscript
         from indic_transliteration.detect import detect
@@ -109,8 +116,8 @@ def align_lyrics(
     if not lines:
         return [], []
 
-    lang = language or settings.asr_language
-    segments = _whisper_segments(audio_path, lang)
+    # language=None → Whisper определит язык сам (auto)
+    segments = _whisper_segments(audio_path, language)
     timeline = _match_segments_to_lines(segments, lines)
     out_lines = _lines_with_first_occurrence(lines, timeline)
     return out_lines, timeline

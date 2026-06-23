@@ -71,6 +71,7 @@ class JobView(BaseModel):
     source_type: Optional[str] = None
     source_ref: Optional[str] = None
     lyrics: Optional[str] = None
+    language: Optional[str] = None  # язык для ASR-выравнивания (bn/hi/sa/en/ru/auto)
     error: Optional[str] = None
     warnings: list[str] = Field(default_factory=list)
     result: Optional[JobResult] = None

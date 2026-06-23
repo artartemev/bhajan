@@ -62,3 +62,20 @@ def test_upload_pipeline_stub():
 def test_requires_source():
     r = client.post("/api/jobs", data={"title": "no source"})
     assert r.status_code == 400
+
+
+def test_lyrics_with_language_persisted():
+    fake_audio = io.BytesIO(b"RIFF....not-real-audio")
+    r = client.post(
+        "/api/jobs",
+        files={"file": ("song.mp3", fake_audio, "audio/mpeg")},
+        data={"title": "Simple", "lyrics": "first line\nsecond line", "language": "en"},
+    )
+    assert r.status_code == 200, r.text
+    job_id = r.json()["id"]
+
+    job = _wait_done(job_id)
+    assert job["status"] == "done", job.get("error")
+    assert job["language"] == "en"
+    # в stub-режиме срабатывает fallback_align (равномерное деление) → строки есть
+    assert len(job["result"]["lyrics_lines"]) == 2

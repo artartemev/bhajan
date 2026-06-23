@@ -115,13 +115,17 @@ def _run(job_id: str) -> None:
     lyrics_lines = []
     lyrics_timeline = []
     lyrics_file_name = None
+    lang = None
     if view.lyrics and view.lyrics.strip():
         storage.update_job(job_id, status=JobStatus.aligning, progress=0.9)
         align_source = stems.get("vocals", source)
+        # язык: из задачи (форма) → иначе из .env. "auto" → None (Whisper определит сам)
+        lang = (view.language or settings.asr_language or "").strip().lower()
+        lang = None if lang in ("", "auto") else lang
         lyrics_lines, lyrics_timeline = _stage(
             "Выравнивание текста",
             tiers=[("faster-whisper", lambda: align_mod.align_lyrics(
-                align_source, view.lyrics or "", language=settings.asr_language,
+                align_source, view.lyrics or "", language=lang,
             ))],
             stub=lambda: align_mod.fallback_align(view.lyrics or "", align_source),
             use_stub=stub, warnings=warnings,
@@ -154,7 +158,7 @@ def _run(job_id: str) -> None:
         lyrics_file=lyrics_file_name,
         lyrics_lines=lyrics_lines,
         lyrics_timeline=lyrics_timeline,
-        lyrics_language=settings.asr_language if view.lyrics else None,
+        lyrics_language=(lang or "auto") if view.lyrics else None,
         stub=stub,
         warnings=warnings,
     )
