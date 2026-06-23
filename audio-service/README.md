@@ -67,13 +67,13 @@ UI открывается на `http://localhost:8000`.
 
 ```bash
 brew install ffmpeg                      # macOS (Ubuntu: sudo apt install ffmpeg)
-pip install -r requirements-light.txt
+pip install -r requirements.txt -r requirements-light.txt
 uvicorn app.main:app --reload
 ```
 
-### Лучшее качество (full: Basic Pitch + madmom, нужен Python 3.10–3.11)
+### Лучшее качество (full: Basic Pitch, нужен Python 3.10–3.11)
 
-TensorFlow/madmom/basic-pitch **не ставятся на Python 3.12+** (ошибка сборки
+TensorFlow/basic-pitch **не ставятся на Python 3.12+** (ошибка сборки
 numpy/`pkgutil.ImpImporter`). Заведите отдельное окружение с Python 3.11:
 
 ```bash
@@ -81,14 +81,18 @@ numpy/`pkgutil.ImpImporter`). Заведите отдельное окружен
 conda create -n kirtan python=3.11 -y
 conda activate kirtan
 brew install ffmpeg
-pip install -r requirements-ml.txt
+pip install -r requirements.txt -r requirements-ml.txt
 uvicorn app.main:app --reload
 
 # либо через pyenv + venv
 pyenv install 3.11.9 && pyenv local 3.11.9
 python -m venv .venv && source .venv/bin/activate
-pip install -r requirements-ml.txt
+pip install -r requirements.txt -r requirements-ml.txt
 ```
+
+`madmom` для аккордов намеренно не входит в стек (его сборка падает на отсутствии
+Cython, а аккорды считаются на librosa). Если он всё же нужен — поставьте отдельно
+после остального: `pip install cython numpy && pip install madmom`.
 
 В UI бейдж вверху покажет режим (`stub` / `ML`). Если какой-то метод недоступен,
 шаг сам откатится на librosa или заглушку и допишет предупреждение в задачу.

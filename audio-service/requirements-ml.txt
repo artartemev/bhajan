@@ -1,10 +1,17 @@
-# Тяжёлые ML-зависимости. Ставятся поверх requirements.txt для реального режима.
-# Требуют ffmpeg в системе (для yt-dlp и чтения mp3).
+# Полный ML-стек для ЛУЧШЕГО качества. Нужен Python 3.10–3.11 (TensorFlow/basic-pitch
+# не ставятся на 3.12+). Устанавливать ВМЕСТЕ с ядром:
+#     pip install -r requirements.txt -r requirements-ml.txt
+# Требует ffmpeg в системе.
 demucs>=4.0          # разделение на стемы (vocals/drums/bass/other)
-librosa>=0.10        # pyin — монофоническая транскрипция вокала
+librosa>=0.10        # pyin (вокал), CQT (фисгармонь), хрома (аккорды)
 soundfile>=0.12      # чтение/запись wav
 scipy>=1.11          # band-pass для фисгармони
-basic-pitch>=0.3     # полифоническая транскрипция фисгармони (Spotify)
-madmom>=0.16.1       # распознавание аккордов (DeepChroma + CRF)
+basic-pitch>=0.3     # полифоническая транскрипция фисгармони (Spotify) — главный выигрыш
 yt-dlp>=2024.0       # скачивание звука с YouTube
 numpy>=1.24
+
+# madmom НЕ включён намеренно: его сборка ломается (нужен Cython заранее), а аккорды
+# у нас и так считаются на librosa. Если очень нужен madmom для аккордов, ставьте
+# отдельно ПОСЛЕ остального:
+#     pip install cython numpy
+#     pip install madmom
