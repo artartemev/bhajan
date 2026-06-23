@@ -26,6 +26,7 @@ def health() -> dict:
 async def create_job(
     youtube_url: Optional[str] = Form(default=None),
     title: Optional[str] = Form(default=None),
+    lyrics: Optional[str] = Form(default=None),
     file: Optional[UploadFile] = File(default=None),
 ) -> JobView:
     if not youtube_url and file is None:
@@ -33,14 +34,20 @@ async def create_job(
     if youtube_url and file is not None:
         raise HTTPException(400, "Укажите что-то одно: файл ИЛИ youtube_url")
 
+    lyrics = (lyrics or "").strip() or None
+
     if youtube_url:
-        view = storage.create_job(title=title, source_type="youtube", source_ref=youtube_url)
+        view = storage.create_job(
+            title=title, source_type="youtube", source_ref=youtube_url, lyrics=lyrics,
+        )
     else:
         assert file is not None
         contents = await file.read()
         if len(contents) > settings.max_upload_bytes:
             raise HTTPException(413, "Файл слишком большой")
-        view = storage.create_job(title=title or file.filename, source_type="upload", source_ref=file.filename)
+        view = storage.create_job(
+            title=title or file.filename, source_type="upload", source_ref=file.filename, lyrics=lyrics,
+        )
         with tempfile.NamedTemporaryFile(suffix=Path(file.filename or "a.mp3").suffix, delete=False) as tmp:
             tmp.write(contents)
             tmp_path = Path(tmp.name)

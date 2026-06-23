@@ -5,21 +5,25 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Kirtan Audio Service</title>
   <style>
-    :root { --bg:#faf8f4; --fg:#2b2b2b; --muted:#8a8378; --accent:#b4682a; --card:#fff; }
+    :root { --bg:#faf8f4; --fg:#2b2b2b; --muted:#8a8378; --accent:#b4682a; --card:#fff; --hi:#fff3e6; }
     * { box-sizing: border-box; }
     body { margin:0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
            background:var(--bg); color:var(--fg); line-height:1.5; }
-    .wrap { max-width:760px; margin:0 auto; padding:32px 20px 80px; }
+    .wrap { max-width:780px; margin:0 auto; padding:32px 20px 80px; }
     h1 { font-weight:600; letter-spacing:-0.01em; margin:0 0 4px; }
     .sub { color:var(--muted); margin:0 0 28px; }
     .card { background:var(--card); border:1px solid #ece7df; border-radius:14px; padding:20px; margin-bottom:18px; }
     label { display:block; font-size:13px; color:var(--muted); margin:0 0 6px; }
-    input[type=text], input[type=file] { width:100%; padding:10px 12px; border:1px solid #ddd6cb;
-           border-radius:10px; background:#fff; font-size:15px; }
+    input[type=text], input[type=file], textarea {
+      width:100%; padding:10px 12px; border:1px solid #ddd6cb;
+      border-radius:10px; background:#fff; font-size:15px; font-family:inherit;
+    }
+    textarea { min-height:120px; resize:vertical; }
     .row { margin-bottom:14px; }
     .or { text-align:center; color:var(--muted); font-size:13px; margin:8px 0; }
     button { background:var(--accent); color:#fff; border:none; border-radius:10px; padding:11px 18px;
              font-size:15px; cursor:pointer; }
+    button.ghost { background:transparent; color:var(--accent); border:1px solid var(--accent); padding:6px 12px; font-size:13px; }
     button:disabled { opacity:.5; cursor:default; }
     .badge { display:inline-block; font-size:12px; padding:2px 8px; border-radius:999px; background:#efe9df; color:#6b6359; }
     .job { border-top:1px solid #efeae1; padding:14px 0; }
@@ -31,12 +35,30 @@
     .files a { display:inline-block; margin-right:14px; font-size:14px; }
     .chords { font-size:13px; color:var(--muted); margin-top:6px; word-break:break-word; }
     code { background:#f1ece3; padding:1px 5px; border-radius:5px; }
+
+    /* Караоке-плеер */
+    .player { margin-top:14px; padding:14px; background:#fbf6ee; border-radius:10px; }
+    .player audio { width:100%; margin-bottom:10px; }
+    .lyrics { max-height:340px; overflow-y:auto; }
+    .lyric-line {
+      padding:6px 10px; border-radius:6px; cursor:pointer;
+      font-size:16px; line-height:1.45;
+      transition:background .25s, color .2s, transform .2s;
+    }
+    .lyric-line.unaligned { color:#a8a195; }
+    .lyric-line.current { background:var(--hi); color:var(--accent); font-weight:600; transform:translateX(4px); }
+    .lyric-line.structural { color:var(--muted); font-style:italic; padding-top:10px; }
+    .lyric-chord {
+      display:inline-block; font-size:11px; color:var(--accent);
+      background:#f5e9d8; padding:0 5px; border-radius:4px; margin-right:4px;
+      vertical-align:1px;
+    }
   </style>
 </head>
 <body>
   <div class="wrap">
     <h1>Kirtan Audio Service</h1>
-    <p class="sub">MP3 или ссылка на YouTube → вокал и фисгармонь → MIDI и аккорды.</p>
+    <p class="sub">MP3 или ссылка на YouTube → вокал и фисгармонь → MIDI, аккорды, синхронизированный текст.</p>
     <span class="badge" id="mode">…</span>
 
     <div class="card">
@@ -53,6 +75,10 @@
         <label>Название (необязательно)</label>
         <input type="text" id="title" placeholder="Например: Шри Рам" />
       </div>
+      <div class="row">
+        <label>Текст песни (необязательно) — каждая строка с новой строки. Строки в [скобках] — структурные.</label>
+        <textarea id="lyrics" placeholder="Шри Рам джай Рам джай джай Рам&#10;Шри Рам джай Рам джай джай Рам&#10;[припев]&#10;..."></textarea>
+      </div>
       <button id="go">Обработать</button>
     </div>
 
@@ -62,6 +88,7 @@
 
   <script>
     const api = (p) => `/api${p}`;
+    const fileUrl = (id, name) => api('/jobs/' + id + '/files/' + encodeURIComponent(name));
 
     async function refreshMode() {
       try {
@@ -75,12 +102,14 @@
       const url = document.getElementById('url').value.trim();
       const file = document.getElementById('file').files[0];
       const title = document.getElementById('title').value.trim();
+      const lyrics = document.getElementById('lyrics').value;
       if (!url && !file) { alert('Укажите ссылку или файл'); return; }
 
       const fd = new FormData();
       if (title) fd.append('title', title);
       if (url) fd.append('youtube_url', url);
       if (file) fd.append('file', file);
+      if (lyrics.trim()) fd.append('lyrics', lyrics);
 
       const btn = document.getElementById('go');
       btn.disabled = true; btn.textContent = 'Отправляю…';
@@ -89,6 +118,7 @@
         if (!res.ok) { alert('Ошибка: ' + (await res.text())); return; }
         document.getElementById('url').value = '';
         document.getElementById('file').value = '';
+        document.getElementById('lyrics').value = '';
         await renderJobs();
       } finally {
         btn.disabled = false; btn.textContent = 'Обработать';
@@ -96,36 +126,125 @@
     });
 
     function fileLink(id, name) {
-      return `<a href="${api('/jobs/' + id + '/files/' + encodeURIComponent(name))}" target="_blank">${name}</a>`;
+      return `<a href="${fileUrl(id, name)}" target="_blank">${name}</a>`;
     }
 
+    // Текущий аккорд для момента времени t (двоичный поиск был бы лучше, но строк мало)
+    function chordAt(chords, t) {
+      for (const c of chords) if (t >= c.start && t < c.end) return c.label;
+      return null;
+    }
+
+    function renderPlayer(job) {
+      const r = job.result;
+      const audioName = (r.stems && (r.stems.vocals || Object.values(r.stems)[0])) || null;
+      const sourceCandidates = ['source.mp3', 'source.wav', 'source.m4a'];
+      let src = audioName ? fileUrl(job.id, audioName) : null;
+      // лучше — оригинал, если есть; пробуем source.mp3 как основной
+      // (если его нет, попадём на vocals — тоже играбельно)
+      const tryOriginal = sourceCandidates.find(n => true); // не знаем точно — js не умеет, пусть сам audio решит
+      // Просто берём source.mp3 и стрим — браузер покажет ошибку, если файла нет; fallback на стемы.
+      const audioId = `audio-${job.id}`;
+      const lyricsId = `lyrics-${job.id}`;
+      const lines = r.lyrics_lines || [];
+
+      const linesHtml = lines.map((l, i) => {
+        const cls = ['lyric-line'];
+        if (!l.aligned && (l.start === null || l.start === undefined)) cls.push('unaligned');
+        if (/^[\[\(].+[\]\)]$/.test(l.text.trim())) cls.push('structural');
+        const dataStart = l.start !== null && l.start !== undefined ? l.start : '';
+        const dataEnd = l.end !== null && l.end !== undefined ? l.end : '';
+        return `<div class="${cls.join(' ')}" data-i="${i}" data-start="${dataStart}" data-end="${dataEnd}">${escapeHtml(l.text)}</div>`;
+      }).join('');
+
+      return `<div class="player">
+        <audio id="${audioId}" controls preload="metadata"
+          src="${fileUrl(job.id, 'source.mp3')}"
+          onerror="this.src='${fileUrl(job.id, audioName || 'stems/vocals.wav')}'"></audio>
+        <div class="lyrics" id="${lyricsId}">${linesHtml}</div>
+      </div>`;
+    }
+
+    function escapeHtml(s) {
+      return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+
+    function wireUpPlayer(job) {
+      const r = job.result;
+      const audio = document.getElementById(`audio-${job.id}`);
+      const container = document.getElementById(`lyrics-${job.id}`);
+      if (!audio || !container) return;
+      const lines = Array.from(container.querySelectorAll('.lyric-line'));
+
+      // клик по строке → перемотка
+      lines.forEach(el => {
+        el.addEventListener('click', () => {
+          const s = parseFloat(el.dataset.start);
+          if (!isNaN(s)) { audio.currentTime = s; audio.play(); }
+        });
+      });
+
+      // подсветка текущей строки по времени
+      audio.addEventListener('timeupdate', () => {
+        const t = audio.currentTime;
+        let activeIdx = -1;
+        for (let i = 0; i < lines.length; i++) {
+          const s = parseFloat(lines[i].dataset.start);
+          const e = parseFloat(lines[i].dataset.end);
+          if (!isNaN(s) && !isNaN(e) && t >= s && t < e) { activeIdx = i; break; }
+        }
+        lines.forEach((el, i) => el.classList.toggle('current', i === activeIdx));
+        if (activeIdx >= 0) {
+          const el = lines[activeIdx];
+          const cRect = container.getBoundingClientRect();
+          const eRect = el.getBoundingClientRect();
+          if (eRect.top < cRect.top + 20 || eRect.bottom > cRect.bottom - 20) {
+            container.scrollTo({ top: el.offsetTop - container.clientHeight/2 + el.clientHeight/2, behavior: 'smooth' });
+          }
+        }
+      });
+    }
+
+    let lastJobsSig = '';
     async function renderJobs() {
       const jobs = await (await fetch(api('/jobs'))).json();
       const box = document.getElementById('jobs');
-      if (!jobs.length) { box.innerHTML = '<p class="sub">Пока пусто.</p>'; return; }
+      if (!jobs.length) { box.innerHTML = '<p class="sub">Пока пусто.</p>'; lastJobsSig = ''; return; }
+
+      // подпись для определения изменений (чтобы не перерисовывать плеер, пока он играет)
+      const sig = jobs.map(j => `${j.id}:${j.status}:${j.progress}`).join('|');
+      if (sig === lastJobsSig) return;
+      lastJobsSig = sig;
+
       box.innerHTML = jobs.map(j => {
         const pct = Math.round((j.progress || 0) * 100);
         let body = '';
         if (j.status === 'error') {
-          body = `<div class="chords">Ошибка: ${(j.error || '').split('\n')[0]}</div>`;
+          body = `<div class="chords">Ошибка: ${escapeHtml((j.error || '').split('\n')[0])}</div>`;
         } else if (j.status === 'done' && j.result) {
           const r = j.result;
           const stems = Object.entries(r.stems || {}).map(([k, v]) => fileLink(j.id, v)).join(' ');
           const midi = Object.entries(r.midi || {}).map(([k, v]) => fileLink(j.id, v)).join(' ');
           const chords = (r.chords || []).map(c => c.label).join(' → ');
-          const warns = (r.warnings || []).map(w => `<div>⚠️ ${w}</div>`).join('');
+          const warns = (r.warnings || []).map(w => `<div>⚠️ ${escapeHtml(w)}</div>`).join('');
+          const hasLyrics = (r.lyrics_lines || []).length > 0;
           body = `<div class="files"><b>Стемы:</b> ${stems || '—'}</div>
                   <div class="files"><b>MIDI:</b> ${midi || '—'}</div>
-                  <div class="chords"><b>Аккорды:</b> <code>${chords || '—'}</code></div>
-                  ${warns ? `<div class="chords">${warns}</div>` : ''}`;
+                  <div class="chords"><b>Аккорды:</b> <code>${escapeHtml(chords || '—')}</code></div>
+                  ${warns ? `<div class="chords">${warns}</div>` : ''}
+                  ${hasLyrics ? renderPlayer(j) : ''}`;
         }
         return `<div class="job">
-          <div><b>${j.title || j.id}</b> <span class="badge">${j.source_type || ''}</span></div>
+          <div><b>${escapeHtml(j.title || j.id)}</b> <span class="badge">${j.source_type || ''}</span></div>
           <div class="status">${j.status} · ${pct}%</div>
           <div class="bar"><i style="width:${pct}%"></i></div>
           ${body}
         </div>`;
       }).join('');
+
+      // подцепляем обработчики плеера для каждой завершённой задачи с текстом
+      jobs.filter(j => j.status === 'done' && j.result && (j.result.lyrics_lines || []).length)
+        .forEach(j => wireUpPlayer(j));
     }
 
     refreshMode();

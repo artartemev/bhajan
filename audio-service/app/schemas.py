@@ -13,8 +13,16 @@ class JobStatus(str, Enum):
     separating = "separating"
     transcribing = "transcribing"
     chords = "chords"
+    aligning = "aligning"
     done = "done"
     error = "error"
+
+
+class LyricLine(BaseModel):
+    text: str
+    start: Optional[float] = None
+    end: Optional[float] = None
+    aligned: bool = False  # True — есть тайминги от Whisper; False — без привязки
 
 
 class CreateJobRequest(BaseModel):
@@ -37,6 +45,9 @@ class JobResult(BaseModel):
     midi: dict[str, str] = Field(default_factory=dict)
     chords_file: Optional[str] = None
     chords: list[ChordSpan] = Field(default_factory=list)
+    lyrics_file: Optional[str] = None
+    lyrics_lines: list[LyricLine] = Field(default_factory=list)
+    lyrics_language: Optional[str] = None
     stub: bool = False
     warnings: list[str] = Field(default_factory=list)
 
@@ -48,6 +59,7 @@ class JobView(BaseModel):
     title: Optional[str] = None
     source_type: Optional[str] = None
     source_ref: Optional[str] = None
+    lyrics: Optional[str] = None
     error: Optional[str] = None
     warnings: list[str] = Field(default_factory=list)
     result: Optional[JobResult] = None

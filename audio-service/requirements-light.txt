@@ -8,3 +8,4 @@ soundfile>=0.12      # чтение/запись wav
 scipy>=1.11          # band-pass для фисгармони
 yt-dlp>=2024.0       # скачивание звука с YouTube
 numpy>=1.24
+faster-whisper>=1.0  # forced alignment текста по аудио (опционально)

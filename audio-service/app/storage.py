@@ -36,7 +36,13 @@ def _job_file(job_id: str) -> Path:
     return job_dir(job_id) / "job.json"
 
 
-def create_job(*, title: Optional[str], source_type: str, source_ref: Optional[str]) -> JobView:
+def create_job(
+    *,
+    title: Optional[str],
+    source_type: str,
+    source_ref: Optional[str],
+    lyrics: Optional[str] = None,
+) -> JobView:
     job_id = uuid.uuid4().hex[:12]
     d = job_dir(job_id)
     (d / "stems").mkdir(parents=True, exist_ok=True)
@@ -46,21 +52,32 @@ def create_job(*, title: Optional[str], source_type: str, source_ref: Optional[s
         title=title,
         source_type=source_type,
         source_ref=source_ref,
+        lyrics=lyrics,
     )
     save_job(view)
     return view
 
 
 def save_job(view: JobView) -> None:
+    """Атомарная запись через временный файл + rename, чтобы читатели не видели пустоты."""
+    f = _job_file(view.id)
+    tmp = f.with_suffix(".json.tmp")
     with _lock:
-        _job_file(view.id).write_text(view.model_dump_json(indent=2), encoding="utf-8")
+        tmp.write_text(view.model_dump_json(indent=2), encoding="utf-8")
+        tmp.replace(f)
 
 
 def load_job(job_id: str) -> Optional[JobView]:
     f = _job_file(job_id)
     if not f.exists():
         return None
-    return JobView.model_validate_json(f.read_text(encoding="utf-8"))
+    raw = f.read_text(encoding="utf-8").strip()
+    if not raw:
+        return None
+    try:
+        return JobView.model_validate_json(raw)
+    except Exception:
+        return None
 
 
 def list_jobs() -> list[JobView]:

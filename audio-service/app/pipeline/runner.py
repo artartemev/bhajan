@@ -12,6 +12,7 @@ from pathlib import Path
 from ..config import settings
 from ..schemas import JobResult, JobStatus
 from .. import storage
+from . import align as align_mod
 from . import chords as chords_mod
 from . import download, separate, transcribe
 
@@ -110,12 +111,38 @@ def _run(job_id: str) -> None:
         encoding="utf-8",
     )
 
-    # 5. Манифест
+    # 5. Выравнивание текста с аудио (если пользователь передал текст)
+    lyrics_lines = []
+    lyrics_file_name = None
+    if view.lyrics and view.lyrics.strip():
+        storage.update_job(job_id, status=JobStatus.aligning, progress=0.9)
+        align_source = stems.get("vocals", source)
+        lyrics_lines = _stage(
+            "Выравнивание текста",
+            tiers=[("faster-whisper", lambda: align_mod.align_lyrics(
+                align_source, view.lyrics or "", language=settings.asr_language,
+            ))],
+            stub=lambda: align_mod._equal_split(  # noqa: SLF001 — намеренно используем как заглушку
+                align_mod.split_lines(view.lyrics or ""), align_source,
+            ),
+            use_stub=stub, warnings=warnings,
+        ) or []
+        lyrics_path = d / "lyrics.json"
+        lyrics_path.write_text(
+            json.dumps([l.model_dump() for l in lyrics_lines], ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        lyrics_file_name = lyrics_path.name
+
+    # 6. Манифест
     result = JobResult(
         stems={name: _rel(d, p) for name, p in stems.items()},
         midi=midi,
         chords_file=chords_file.name,
         chords=chord_spans,
+        lyrics_file=lyrics_file_name,
+        lyrics_lines=lyrics_lines,
+        lyrics_language=settings.asr_language if view.lyrics else None,
         stub=stub,
         warnings=warnings,
     )
