@@ -28,33 +28,120 @@ def _clean(events, *, harmonic_suppression: bool):
 
 
 def vocals_to_midi(audio_path: Path, output_path: Path) -> int:
-    """Монофоническая транскрипция вокала через librosa.pyin. Возвращает число нот."""
+    """Монофоническая транскрипция вокала через librosa.pyin.
+
+    Против «каши» из 100+ нот на короткой мелодии:
+      • медианный фильтр f0 гасит вибрато/глиссандо до квантизации по полутону
+      • snap к тональности прижимает ноты вне лада к ближайшей ступени
+        (для Am убирает F#/C#/D#, которые PYIN ловит на украшениях)
+      • onset/offset квантуются к сетке долей (по beat tracker)
+    """
     import librosa
     import numpy as np
 
     y, sr = librosa.load(str(audio_path), sr=None, mono=True)
+    hop_length = 512
     f0, voiced_flag, voiced_prob = librosa.pyin(
         y, sr=sr,
         fmin=librosa.note_to_hz("C2"),
         fmax=librosa.note_to_hz("C7"),
         frame_length=2048,
+        hop_length=hop_length,
     )
-    hop_length = 512
-    frame_dur = hop_length / sr
-    times = librosa.times_like(f0, sr=sr, hop_length=hop_length)
 
-    # По-кадровые ноты; склейку соседних кадров одного тона делает clean_notes
+    # 1) f0 → сглаживание (медианой по 7 кадрам ≈ 80мс, режет вибрато и глайды)
+    try:
+        from scipy.ndimage import median_filter
+        pitch_hz = np.where(np.isfinite(f0), f0, 0.0)
+        pitch_hz = median_filter(pitch_hz, size=7)
+    except ImportError:
+        pitch_hz = np.nan_to_num(f0, nan=0.0)
+
+    frame_dur = hop_length / sr
+    times = librosa.times_like(pitch_hz, sr=sr, hop_length=hop_length)
+
+    # 2) snap к тональности: определяем ключ по чистой хроме и притягиваем каждую
+    #    ноту к ближайшей ступени лада (в окне ±2 полутона)
+    from . import chords as chords_mod
+    chroma_key = librosa.feature.chroma_cqt(y=librosa.effects.harmonic(y), sr=sr)
+    tonic, is_minor = chords_mod._estimate_key(chroma_key)
+    scale = _scale_pcs(tonic, is_minor)
+
     events = []
-    for i in range(len(f0)):
-        if not voiced_flag[i] or np.isnan(f0[i]):
+    for i in range(len(pitch_hz)):
+        if not voiced_flag[i] or pitch_hz[i] <= 0:
             continue
-        pitch = int(round(librosa.hz_to_midi(f0[i])))
+        pitch = int(round(librosa.hz_to_midi(pitch_hz[i])))
+        pitch = _snap_to_scale(pitch, scale)
         sal = float(voiced_prob[i]) if voiced_prob is not None else 1.0
         events.append((float(times[i]), float(times[i] + frame_dur), pitch, sal))
 
     notes = _clean(events, harmonic_suppression=False)
+
+    # 3) квантизация к сетке долей (1/2 доли ≈ 8-ая): выравнивает onset/offset
+    try:
+        _tempo, beats = librosa.beat.beat_track(y=y, sr=sr, hop_length=hop_length)
+        if len(beats) >= 4:
+            beat_times = librosa.frames_to_time(beats, sr=sr, hop_length=hop_length)
+            grid = _subdivide(beat_times, subdivisions=2)
+            notes = _quantize_to_grid(notes, grid, min_dur=settings.note_min_duration)
+    except Exception:
+        pass
+
     write_midi(notes, output_path)
     return len(notes)
+
+
+def _scale_pcs(tonic: int, is_minor: bool) -> set[int]:
+    """Классы высот (0-11) диатонического лада. Для минора — гармонический (с VII↑)."""
+    if is_minor:
+        steps = (0, 2, 3, 5, 7, 8, 10, 11)  # + повышенная VII (11)
+    else:
+        steps = (0, 2, 4, 5, 7, 9, 11)
+    return {(tonic + s) % 12 for s in steps}
+
+
+def _snap_to_scale(pitch: int, scale: set[int]) -> int:
+    """Возвращает ближайшую ноту лада (в пределах ±2 полутонов); иначе — как есть."""
+    for delta in (0, -1, 1, -2, 2):
+        if (pitch + delta) % 12 in scale:
+            return pitch + delta
+    return pitch
+
+
+def _subdivide(beat_times, *, subdivisions: int):
+    """Даёт сетку subdivisions на долю (2 → 8-ые, 4 → 16-ые)."""
+    import numpy as np
+    beat_times = list(beat_times)
+    grid = []
+    for a, b in zip(beat_times, beat_times[1:]):
+        step = (b - a) / subdivisions
+        for k in range(subdivisions):
+            grid.append(a + k * step)
+    grid.append(beat_times[-1])
+    return np.asarray(grid)
+
+
+def _quantize_to_grid(notes, grid, *, min_dur: float):
+    """Прижимает onset и offset нот к ближайшей точке сетки; отбрасывает короткие."""
+    import numpy as np
+    if not len(grid):
+        return notes
+    out = []
+    for s, e, p in notes:
+        qs = float(grid[int(np.argmin(np.abs(grid - s)))])
+        qe = float(grid[int(np.argmin(np.abs(grid - e)))])
+        if qe - qs < min_dur:
+            continue
+        out.append((qs, qe, p))
+    # склейка соседних нот того же тона, оказавшихся вплотную после квантизации
+    merged = []
+    for s, e, p in out:
+        if merged and merged[-1][2] == p and abs(s - merged[-1][1]) < 1e-6:
+            merged[-1] = (merged[-1][0], e, p)
+        else:
+            merged.append((s, e, p))
+    return merged
 
 
 def harmonium_to_midi(audio_path: Path, output_path: Path) -> int:
