@@ -84,6 +84,9 @@
           <option value="sa">Санскрит (sa)</option>
         </select>
       </div>
+      <div class="row">
+        <label><input type="checkbox" id="a_cappella" /> A cappella (голос без сопровождения — пропустить разделение и подбор аккордов)</label>
+      </div>
       <button id="go">Обработать</button>
     </div>
 
@@ -109,6 +112,7 @@
       const title = document.getElementById('title').value.trim();
       const lyrics = document.getElementById('lyrics').value;
       const language = document.getElementById('language').value;
+      const aCappella = document.getElementById('a_cappella').checked;
       if (!url && !file) { alert('Укажите ссылку или файл'); return; }
 
       const fd = new FormData();
@@ -117,6 +121,7 @@
       if (file) fd.append('file', file);
       if (lyrics.trim()) fd.append('lyrics', lyrics);
       if (lyrics.trim()) fd.append('language', language);
+      if (aCappella) fd.append('a_cappella', 'true');
 
       const btn = document.getElementById('go');
       btn.disabled = true; btn.textContent = 'Отправляю…';

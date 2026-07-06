@@ -43,6 +43,7 @@ def create_job(
     source_ref: Optional[str],
     lyrics: Optional[str] = None,
     language: Optional[str] = None,
+    a_cappella: bool = False,
 ) -> JobView:
     job_id = uuid.uuid4().hex[:12]
     d = job_dir(job_id)
@@ -55,6 +56,7 @@ def create_job(
         source_ref=source_ref,
         lyrics=lyrics,
         language=language,
+        a_cappella=a_cappella,
     )
     save_job(view)
     return view

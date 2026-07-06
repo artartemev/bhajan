@@ -81,6 +81,7 @@ class JobView(BaseModel):
     source_ref: Optional[str] = None
     lyrics: Optional[str] = None
     language: Optional[str] = None  # язык для ASR-выравнивания (bn/hi/sa/en/ru/auto)
+    a_cappella: bool = False        # a cappella: пропуск Demucs и аккордов
     error: Optional[str] = None
     warnings: list[str] = Field(default_factory=list)
     result: Optional[JobResult] = None

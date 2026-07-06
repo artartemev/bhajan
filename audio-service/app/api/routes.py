@@ -28,6 +28,7 @@ async def create_job(
     title: Optional[str] = Form(default=None),
     lyrics: Optional[str] = Form(default=None),
     language: Optional[str] = Form(default=None),
+    a_cappella: bool = Form(default=False),
     file: Optional[UploadFile] = File(default=None),
 ) -> JobView:
     if not youtube_url and file is None:
@@ -41,7 +42,7 @@ async def create_job(
     if youtube_url:
         view = storage.create_job(
             title=title, source_type="youtube", source_ref=youtube_url,
-            lyrics=lyrics, language=language,
+            lyrics=lyrics, language=language, a_cappella=a_cappella,
         )
     else:
         assert file is not None
@@ -50,7 +51,7 @@ async def create_job(
             raise HTTPException(413, "Файл слишком большой")
         view = storage.create_job(
             title=title or file.filename, source_type="upload", source_ref=file.filename,
-            lyrics=lyrics, language=language,
+            lyrics=lyrics, language=language, a_cappella=a_cappella,
         )
         with tempfile.NamedTemporaryFile(suffix=Path(file.filename or "a.mp3").suffix, delete=False) as tmp:
             tmp.write(contents)

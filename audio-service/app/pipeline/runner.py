@@ -49,10 +49,13 @@ def _run(job_id: str) -> None:
     # warnings собираются по ходу: если ML-шаг недоступен/упал, фиксируем и идём дальше
     warnings: list[str] = []
 
-    # 2. Разделение на дорожки
+    # 2. Разделение на дорожки. В режиме a cappella пропускаем: разделять нечего,
+    #    Demucs только вносит артефакты в чистый голос.
     storage.update_job(job_id, status=JobStatus.separating, progress=0.25)
     stems_dir = d / "stems"
-    if stub:
+    if view.a_cappella:
+        stems = {"vocals": source}
+    elif stub:
         stems = separate.stub_separate(source, stems_dir, harmonium_stem=settings.harmonium_stem)
     else:
         try:
@@ -93,32 +96,38 @@ def _run(job_id: str) -> None:
     if harmonium_mid.exists():
         midi["harmonium"] = harmonium_mid.name
 
-    # 4. Аккорды — по выбранному стему (по умолчанию вокал: мелодия чище задаёт
-    #    тональность и подразумеваемую гармонию, чем шумный стем фисгармони)
+    # 4. Аккорды. В a cappella гармонии нет физически — детектор возвращает шум,
+    #    поэтому шаг пропускается. Тональность всё равно считаем — по вокалу.
     storage.update_job(job_id, status=JobStatus.chords, progress=0.8)
-    chord_source = stems.get(settings.chord_source) or stems.get("harmonium") or source
-    chord_spans = _stage(
-        "Аккорды",
-        tiers=[
-            ("madmom", lambda: chords_mod.detect_chords(chord_source)),
-            ("librosa", lambda: chords_mod.detect_chords_librosa(chord_source)),
-        ],
-        stub=chords_mod.stub_chords,
-        use_stub=stub, warnings=warnings,
-    ) or []
+    chord_spans = []
+    key = None
+    if view.a_cappella:
+        try:
+            key = chords_mod.estimate_key(stems.get("vocals") or source)
+        except Exception as exc:  # noqa: BLE001
+            warnings.append(_warn("Тональность", exc, "пропущена"))
+    else:
+        chord_source = stems.get(settings.chord_source) or stems.get("harmonium") or source
+        chord_spans = _stage(
+            "Аккорды",
+            tiers=[
+                ("madmom", lambda: chords_mod.detect_chords(chord_source)),
+                ("librosa", lambda: chords_mod.detect_chords_librosa(chord_source)),
+            ],
+            stub=chords_mod.stub_chords,
+            use_stub=stub, warnings=warnings,
+        ) or []
+        if not stub:
+            try:
+                key = chords_mod.estimate_key(chord_source)
+            except Exception as exc:  # noqa: BLE001
+                warnings.append(_warn("Тональность", exc, "пропущена"))
+
     chords_file = d / "chords.json"
     chords_file.write_text(
         json.dumps([c.model_dump() for c in chord_spans], ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
-
-    # тональность песни (для аккордового листа)
-    key = None
-    if not stub:
-        try:
-            key = chords_mod.estimate_key(chord_source)
-        except Exception as exc:  # noqa: BLE001
-            warnings.append(_warn("Тональность", exc, "пропущена"))
 
     # 5. Выравнивание текста с аудио (если пользователь передал текст)
     lyrics_lines = []
