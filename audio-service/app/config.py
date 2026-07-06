@@ -51,6 +51,8 @@ class Settings:
     chord_source: str             # стем для детекции аккордов: vocals/harmonium/instrumental
     chord_beats_per_bar: int      # долей в такте — аккорд берётся на такт, а не на долю
     chord_change_penalty: float   # штраф Витерби за смену аккорда (больше → меньше смен)
+    vocal_loudness_db: float      # окно громкости (dB) от пика для попадания ноты в MIDI
+    vocal_note_min_duration: float  # минимальная длительность ноты вокала, с (отсекает украшения)
     # --- Выравнивание текста (forced alignment) ---
     asr_model: str                # размер Whisper: tiny/base/small/medium/large-v3
     asr_language: str             # язык: hi (хинди), sa (санскрит), bn, en и т.д.
@@ -82,6 +84,8 @@ class Settings:
             chord_source=os.environ.get("CHORD_SOURCE", "instrumental").strip().lower(),
             chord_beats_per_bar=int(os.environ.get("CHORD_BEATS_PER_BAR", "4")),
             chord_change_penalty=float(os.environ.get("CHORD_CHANGE_PENALTY", "0.08")),
+            vocal_loudness_db=float(os.environ.get("VOCAL_LOUDNESS_DB", "25")),
+            vocal_note_min_duration=float(os.environ.get("VOCAL_NOTE_MIN_DURATION", "0.30")),
             asr_model=os.environ.get("ASR_MODEL", "small"),
             asr_language=os.environ.get("ASR_LANGUAGE", "hi"),
             asr_device=os.environ.get("ASR_DEVICE", "auto"),

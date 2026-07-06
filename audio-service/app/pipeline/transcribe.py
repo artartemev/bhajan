@@ -30,11 +30,9 @@ def _clean(events, *, harmonic_suppression: bool):
 def vocals_to_midi(audio_path: Path, output_path: Path) -> int:
     """Монофоническая транскрипция вокала через librosa.pyin.
 
-    Против «каши» из 100+ нот на короткой мелодии:
-      • медианный фильтр f0 гасит вибрато/глиссандо до квантизации по полутону
-      • snap к тональности прижимает ноты вне лада к ближайшей ступени
-        (для Am убирает F#/C#/D#, которые PYIN ловит на украшениях)
-      • onset/offset квантуются к сетке долей (по beat tracker)
+    Идея: пишем только **явно слышимые** ноты. Тихие кадры (дыхание, послезвучие,
+    транзиенты между нотами) отсекаются по громкости, даже если PYIN на них
+    уверенно даёт тон. Оставшиеся ноты сглаживаются и притягиваются к ладу.
     """
     import librosa
     import numpy as np
@@ -49,7 +47,17 @@ def vocals_to_midi(audio_path: Path, output_path: Path) -> int:
         hop_length=hop_length,
     )
 
-    # 1) f0 → сглаживание (медианой по 7 кадрам ≈ 80мс, режет вибрато и глайды)
+    # 1) громкость вокала покадрово (RMS в dB) — стробируем по ней
+    rms = librosa.feature.rms(y=y, frame_length=2048, hop_length=hop_length)[0]
+    # выравниваем длину с f0 (у pyin и rms она обычно совпадает, но подстрахуемся)
+    n = min(len(f0), len(rms))
+    f0 = f0[:n]; voiced_flag = voiced_flag[:n]; voiced_prob = voiced_prob[:n]; rms = rms[:n]
+    rms_db = librosa.amplitude_to_db(rms + 1e-9)
+    # порог: -35 dB от пика вокала → тише пропускаем
+    loud_thr_db = float(rms_db.max()) - settings.vocal_loudness_db
+    is_loud = rms_db >= loud_thr_db
+
+    # 2) f0 → медианное сглаживание (гасит вибрато/глиссандо)
     try:
         from scipy.ndimage import median_filter
         pitch_hz = np.where(np.isfinite(f0), f0, 0.0)
@@ -60,25 +68,51 @@ def vocals_to_midi(audio_path: Path, output_path: Path) -> int:
     frame_dur = hop_length / sr
     times = librosa.times_like(pitch_hz, sr=sr, hop_length=hop_length)
 
-    # 2) snap к тональности: определяем ключ по чистой хроме и притягиваем каждую
-    #    ноту к ближайшей ступени лада (в окне ±2 полутона)
+    # 3) снап к ладу
     from . import chords as chords_mod
     chroma_key = librosa.feature.chroma_cqt(y=librosa.effects.harmonic(y), sr=sr)
     tonic, is_minor = chords_mod._estimate_key(chroma_key)
     scale = _scale_pcs(tonic, is_minor)
 
-    events = []
-    for i in range(len(pitch_hz)):
-        if not voiced_flag[i] or pitch_hz[i] <= 0:
+    # 4) НОТЫ ПО ONSET-ДЕТЕКТОРУ.
+    #    Одна нота = отрезок «атака → следующая атака», высота = медиана f0
+    #    внутри, громкость = средний RMS. Так одна спетая нота остаётся одной
+    #    нотой, а не режется PYIN на 2-3 куска.
+    onset_frames = librosa.onset.onset_detect(
+        y=y, sr=sr, hop_length=hop_length, backtrack=True,
+    )
+    # добавляем начало и конец
+    bounds = sorted(set([0, *onset_frames.tolist(), n]))
+
+    raw_notes = []
+    for a, b in zip(bounds, bounds[1:]):
+        if b - a < 2:
             continue
-        pitch = int(round(librosa.hz_to_midi(pitch_hz[i])))
+        seg_pitch = pitch_hz[a:b]
+        seg_loud = rms_db[a:b]
+        seg_voiced = voiced_flag[a:b]
+        # берём только «озвученные и громкие» кадры внутри сегмента
+        mask = seg_voiced & (seg_pitch > 0) & (seg_loud >= loud_thr_db)
+        if mask.sum() < 3:  # меньше ~35мс полезного тона → это не нота
+            continue
+        vals = np.log2(seg_pitch[mask])
+        pitch = int(round(librosa.hz_to_midi(2.0 ** np.median(vals))))
         pitch = _snap_to_scale(pitch, scale)
-        sal = float(voiced_prob[i]) if voiced_prob is not None else 1.0
-        events.append((float(times[i]), float(times[i] + frame_dur), pitch, sal))
+        s = float(times[a])
+        e = float(times[b - 1] + frame_dur)
+        # salience = средняя относительная громкость (0..1) сегмента
+        rel_loud = float((seg_loud[mask].mean() - loud_thr_db)
+                         / max(1e-6, rms_db.max() - loud_thr_db))
+        raw_notes.append((s, e, pitch, max(0.0, rel_loud)))
 
-    notes = _clean(events, harmonic_suppression=False)
+    # склейка соседних одинаковых + отсев коротких по общему пост-процессору
+    notes = _clean(raw_notes, harmonic_suppression=False)
 
-    # 3) квантизация к сетке долей (1/2 доли ≈ 8-ая): выравнивает onset/offset
+    # 4a) агрессивный отсев коротких нот вокала (украшения, глиссандо):
+    #     остаются длинные + короткие, стоящие отдельно (не проходящие)
+    notes = _drop_short_ornaments(notes, min_dur=settings.vocal_note_min_duration)
+
+    # 5) квантизация к сетке 8-ых
     try:
         _tempo, beats = librosa.beat.beat_track(y=y, sr=sr, hop_length=hop_length)
         if len(beats) >= 4:
@@ -90,6 +124,36 @@ def vocals_to_midi(audio_path: Path, output_path: Path) -> int:
 
     write_midi(notes, output_path)
     return len(notes)
+
+
+def _drop_short_ornaments(notes, *, min_dur: float):
+    """Убирает короткие проходящие ноты между двумя длинными.
+
+    Оставляем длинные (≥ min_dur) и границы фраз (когда до/после — пауза).
+    Короткая нота вылетает, если она «прожата» с обеих сторон длинными
+    соседями — это типичное украшение, а не самостоятельная нота мелодии.
+    """
+    if not notes:
+        return notes
+    kept = []
+    for i, (s, e, p) in enumerate(notes):
+        if e - s >= min_dur:
+            kept.append((s, e, p))
+            continue
+        # короткая: смотрим соседей
+        prev_long = i > 0 and (notes[i - 1][1] - notes[i - 1][0]) >= min_dur
+        next_long = i + 1 < len(notes) and (notes[i + 1][1] - notes[i + 1][0]) >= min_dur
+        if prev_long and next_long:
+            continue  # проходящее украшение
+        kept.append((s, e, p))
+    # растягиваем длинных «глотнувших» соседей на освободившееся место
+    for i in range(len(kept) - 1):
+        s0, e0, p0 = kept[i]; s1, e1, p1 = kept[i + 1]
+        if e0 < s1:
+            mid = (e0 + s1) / 2
+            kept[i] = (s0, mid, p0)
+            kept[i + 1] = (mid, e1, p1)
+    return kept
 
 
 def _scale_pcs(tonic: int, is_minor: bool) -> set[int]:
