@@ -74,14 +74,34 @@ def _run(job_id: str) -> None:
     vocals_mid = d / "vocals.mid"
     harmonium_mid = d / "harmonium.mid"
 
-    if "vocals" in stems:
+    # 3a. Верхний тир: MuScriptor — работает на ИСХОДНИКЕ, сам разделяет по
+    # инструментам и возвращает MIDI на каждый (лучше нашего PYIN + basic-pitch
+    # каскада). Включается флагом USE_MUSCRIPTOR; при отсутствии пакета или
+    # неудаче — тихо откатываемся на старый пайплайн.
+    muscriptor_written: set[str] = set()
+    if settings.use_muscriptor and not stub:
+        try:
+            from . import muscriptor_transcribe as ms
+            if ms.is_available():
+                requested = tuple(s for s in ("vocals", "harmonium") if s in stems)
+                produced = ms.transcribe(
+                    source, d, stems=requested, model_size=settings.muscriptor_model,
+                )
+                muscriptor_written = set(produced.keys())
+            else:
+                warnings.append(_warn("MuScriptor", ImportError("пакет не установлен"), "откат на PYIN"))
+        except Exception as exc:  # noqa: BLE001
+            warnings.append(_warn("MuScriptor", exc, "откат на PYIN"))
+
+    # 3b. Фолбэк для стемов, которые MuScriptor не отдал (или он был отключён)
+    if "vocals" in stems and "vocals" not in muscriptor_written:
         _stage(
             "Транскрипция вокала",
             tiers=[("librosa pyin", lambda: transcribe.vocals_to_midi(stems["vocals"], vocals_mid))],
             stub=lambda: transcribe.stub_to_midi(vocals_mid, polyphonic=False),
             use_stub=stub, warnings=warnings,
         )
-    if "harmonium" in stems:
+    if "harmonium" in stems and "harmonium" not in muscriptor_written:
         _stage(
             "Транскрипция фисгармони",
             tiers=[

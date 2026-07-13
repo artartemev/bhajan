@@ -42,6 +42,18 @@ vocals.mid               harmonium.mid
 | Аккорды | madmom (TF) | хрома + шаблоны трезвучий | демо-цепочка |
 | Текст ↔ аудио | faster-whisper | — | равномерное деление |
 
+Транскрипция вокала и фисгармони при `USE_MUSCRIPTOR=1` идёт через
+[MuScriptor](https://github.com/muscriptor/muscriptor) от Kyutai/Mirelo —
+мультиинструментальную transformer-модель, обученную на 170k треков. Она сама
+разделяет ноты по инструментам (`voice` → vocals.mid, `organ` → harmonium.mid),
+поэтому Demucs для MIDI больше не нужен. При ошибке / отсутствии пакета —
+тихий откат на текущий PYIN/basic-pitch каскад.
+
+Веса модели — CC BY-NC 4.0 (некоммерческое использование), гейтированы за
+HuggingFace. См. `requirements-muscriptor.txt`: принять лицензию на странице
+модели, залогиниться (`hf auth login` или `HF_TOKEN=...`), поставить пакет,
+включить `USE_MUSCRIPTOR=1` (опц. `MUSCRIPTOR_MODEL=small/medium/large`).
+
 - **stub** — без ML-зависимостей (заглушки). Включается автоматически, если нет
   librosa/demucs, или через `FORCE_STUB=1`. Для разработки UI/API.
 - **light** — `requirements-light.txt`. **Работает на Python 3.13**, без

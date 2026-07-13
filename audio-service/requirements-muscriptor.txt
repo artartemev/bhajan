@@ -1,0 +1,14 @@
+# Верхний тир транскрипции: MuScriptor от Kyutai/Mirelo.
+#
+# Веса модели лицензированы под CC BY-NC 4.0 (не для коммерческого
+# использования) и гейтированы за HuggingFace. Перед первым запуском:
+#   1) прими лицензию на https://huggingface.co/MuScriptor/muscriptor-small
+#      (или -medium / -large — какую собираешься использовать)
+#   2) залогинься: `hf auth login`  или  export HF_TOKEN=hf_...
+#
+# small (103M) — годится для CPU; medium (307M) — комфортно с GPU;
+# large (1.4B) — сильно хочет GPU. Кеш весов: ~/.cache/muscriptor/
+muscriptor>=0.1
+# torch тянется как транзитивная зависимость muscriptor — если хочется
+# конкретный билд (например CPU-only), поставь его сам заранее:
+# pip install torch --index-url https://download.pytorch.org/whl/cpu

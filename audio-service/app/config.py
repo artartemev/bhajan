@@ -53,6 +53,8 @@ class Settings:
     chord_change_penalty: float   # штраф Витерби за смену аккорда (больше → меньше смен)
     vocal_loudness_db: float      # окно громкости (dB) от пика для попадания ноты в MIDI
     vocal_note_min_duration: float  # минимальная длительность ноты вокала, с (отсекает украшения)
+    use_muscriptor: bool          # включить MuScriptor как верхний тир транскрипции
+    muscriptor_model: str         # small / medium / large / путь к safetensors / hf:// URL
     # --- Выравнивание текста (forced alignment) ---
     asr_model: str                # размер Whisper: tiny/base/small/medium/large-v3
     asr_language: str             # язык: hi (хинди), sa (санскрит), bn, en и т.д.
@@ -86,6 +88,8 @@ class Settings:
             chord_change_penalty=float(os.environ.get("CHORD_CHANGE_PENALTY", "0.08")),
             vocal_loudness_db=float(os.environ.get("VOCAL_LOUDNESS_DB", "35")),
             vocal_note_min_duration=float(os.environ.get("VOCAL_NOTE_MIN_DURATION", "0.15")),
+            use_muscriptor=_env_bool("USE_MUSCRIPTOR", False),
+            muscriptor_model=os.environ.get("MUSCRIPTOR_MODEL", "small"),
             asr_model=os.environ.get("ASR_MODEL", "small"),
             asr_language=os.environ.get("ASR_LANGUAGE", "hi"),
             asr_device=os.environ.get("ASR_DEVICE", "auto"),
