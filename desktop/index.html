@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Bhajan Desktop</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">Bhajan Desktop</div>
+      <div class="status">
+        <span id="service-status" class="badge">Служба: …</span>
+      </div>
+    </header>
+    <main class="workspace">
+      <!-- Этап 0: пока внутри окна крутится наша существующая веб-морда
+           audio-service; секции/Synthesia/обучалка появятся своими панелями. -->
+      <iframe id="workspace-frame" src="about:blank" title="Bhajan workspace"></iframe>
+    </main>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

@@ -1,0 +1,48 @@
+:root {
+  --bg: #fbf6ee;
+  --fg: #2a2621;
+  --muted: #8a7f6f;
+  --accent: #c26100;
+  --card: #ffffff;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body {
+  font-family: -apple-system, "SF Pro Text", "Helvetica Neue", sans-serif;
+  color: var(--fg);
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+}
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 14px;
+  border-bottom: 1px solid rgba(0,0,0,0.06);
+  background: var(--card);
+  -webkit-app-region: drag;   /* окно можно тащить за шапку */
+}
+.brand { font-weight: 700; color: var(--accent); }
+.status .badge {
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #f1ece3;
+  color: var(--muted);
+  -webkit-app-region: no-drag;
+}
+.status .badge.ok    { background: #e6f2e0; color: #2b6a1f; }
+.status .badge.warn  { background: #fdecc4; color: #7a5100; }
+.status .badge.error { background: #fadadd; color: #a51028; }
+.workspace {
+  flex: 1;
+  min-height: 0;
+}
+#workspace-frame {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  display: block;
+  background: var(--bg);
+}
